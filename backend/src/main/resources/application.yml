@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:8000}
+  servlet:
+    session:
+      tracking-modes: cookie
+
+spring:
+  application:
+    name: guobang-transport
+  datasource:
+    url: jdbc:postgresql://${PG_HOST:127.0.0.1}:${PG_PORT:5432}/${PG_DATABASE:transport}?sslmode=disable
+    username: ${PG_USER:transport}
+    password: ${PG_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${PG_POOL_MAX:30}
+      minimum-idle: 2
+  servlet:
+    multipart:
+      max-file-size: ${MAX_IMAGE_UPLOAD_BYTES:15MB}
+      max-request-size: ${MAX_IMAGE_UPLOAD_BYTES:15MB}
+
+logging:
+  level:
+    root: INFO
+    com.guobang.transport: INFO
