@@ -14,6 +14,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
+        // 遍历所有SPA路由，将请求转发到前端入口页面
         for (String route : SPA_ROUTES) {
             registry.addViewController(route).setViewName("forward:/index.html");
         }

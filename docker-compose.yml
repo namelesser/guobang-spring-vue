@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: guobang-postgres
+    environment:
+      POSTGRES_DB: transport
+      POSTGRES_USER: transport
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-552300}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transport"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guobang-backend
+    environment:
+      SERVER_PORT: 8000
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DATABASE: transport
+      PG_USER: transport
+      PG_PASSWORD: ${PG_PASSWORD:-552300}
+      TRANSPORT_AUTH_SECRET: ${TRANSPORT_AUTH_SECRET:-guobang-secret-key-2024}
+      TRANSPORT_AUTH_PASSWORD: ${TRANSPORT_AUTH_PASSWORD:-552300}
+      FLYWAY_ENABLED: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: guobang-frontend
+    ports:
+      - "9527:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

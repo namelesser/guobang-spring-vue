@@ -25,8 +25,8 @@ public class AuthFilter extends OncePerRequestFilter {
     private final ObjectMapper mapper;
 
     public AuthFilter(AuthService authService, ObjectMapper mapper) {
-        this.authService = authService;
-        this.mapper = mapper;
+        this.authService = authService; // 注入认证服务
+        this.mapper = mapper; // 注入 JSON 序列化器
     }
 
     @Override
@@ -35,31 +35,32 @@ public class AuthFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String path = request.getRequestURI();
+        String path = request.getRequestURI(); // 获取请求路径
+        // 非 API 请求或公开路径直接放行
         if (!path.startsWith("/api/") || PUBLIC_API_PATHS.contains(path)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String setupError = authService.setupError();
+        String setupError = authService.setupError(); // 检查认证配置是否完整
         if (!setupError.isBlank()) {
-            writeError(response, 503, setupError);
+            writeError(response, 503, setupError); // 配置不完整，返回 503
             return;
         }
         if (!authService.authenticated(request)) {
-            writeError(response, 401, "未登录或登录已过期");
+            writeError(response, 401, "未登录或登录已过期"); // 未认证，返回 401
             return;
         }
-        filterChain.doFilter(request, response);
+        filterChain.doFilter(request, response); // 认证通过，继续处理请求
     }
 
     private void writeError(HttpServletResponse response, int status, String message) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
+        response.setStatus(status); // 设置 HTTP 状态码
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE); // 指定 JSON 响应类型
+        response.setCharacterEncoding("UTF-8"); // 确保中文正确编码
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("ok", false);
-        body.put("error", message);
-        mapper.writeValue(response.getWriter(), body);
+        body.put("ok", false); // 标记请求失败
+        body.put("error", message); // 写入错误信息
+        mapper.writeValue(response.getWriter(), body); // 序列化为 JSON 并写入响应
     }
 }

@@ -1,56 +1,58 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { NConfigProvider, darkTheme } from 'naive-ui';
+import type { WatermarkProps } from 'naive-ui';
+import { useAppStore } from './store/modules/app';
+import { useThemeStore } from './store/modules/theme';
+import { naiveDateLocales, naiveLocales } from './locales/naive';
+
+defineOptions({
+  name: 'App'
+});
+
+const appStore = useAppStore();
+const themeStore = useThemeStore();
+
+const naiveDarkTheme = computed(() => (themeStore.darkMode ? darkTheme : undefined));
+
+const naiveLocale = computed(() => {
+  return naiveLocales[appStore.locale];
+});
+
+const naiveDateLocale = computed(() => {
+  return naiveDateLocales[appStore.locale];
+});
+
+const watermarkProps = computed<WatermarkProps>(() => {
+  return {
+    content: themeStore.watermarkContent,
+    cross: true,
+    fullscreen: true,
+    fontSize: 16,
+    lineHeight: 16,
+    width: 384,
+    height: 384,
+    xOffset: 12,
+    yOffset: 60,
+    rotate: -15,
+    zIndex: 9999
+  };
+});
+</script>
+
 <template>
-  <n-config-provider :theme="store.dark ? darkTheme : null" :theme-overrides="themeOverrides">
-    <n-message-provider>
-      <n-dialog-provider>
-        <n-notification-provider>
-          <div :class="store.themeClass">
-            <router-view />
-          </div>
-        </n-notification-provider>
-      </n-dialog-provider>
-    </n-message-provider>
-  </n-config-provider>
+  <NConfigProvider
+    :theme="naiveDarkTheme"
+    :theme-overrides="themeStore.naiveTheme"
+    :locale="naiveLocale"
+    :date-locale="naiveDateLocale"
+    class="h-full"
+  >
+    <AppProvider>
+      <RouterView class="bg-layout" />
+      <NWatermark v-if="themeStore.watermark.visible" v-bind="watermarkProps" />
+    </AppProvider>
+  </NConfigProvider>
 </template>
 
-<script setup lang="ts">
-import { onMounted, onBeforeUnmount } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAppStore } from '@/store'
-import { darkTheme, type GlobalThemeOverrides } from 'naive-ui'
-
-const router = useRouter()
-const route = useRoute()
-const store = useAppStore()
-
-const themeOverrides: GlobalThemeOverrides = {
-  common: {
-    primaryColor: '#2563eb',
-    primaryColorHover: '#3b82f6',
-    primaryColorPressed: '#1d4ed8',
-    infoColor: '#0891b2',
-    successColor: '#16a34a',
-    warningColor: '#d97706',
-    errorColor: '#dc2626',
-    borderRadius: '8px',
-  },
-}
-
-function handleAuthRequired() {
-  store.logout()
-  router.push('/login')
-}
-
-onMounted(async () => {
-  window.addEventListener('auth-required', handleAuthRequired)
-  await store.checkAuth()
-  if (!store.authenticated && route.path !== '/login') {
-    router.replace('/login')
-  } else if (store.authenticated && route.path === '/login') {
-    router.replace('/')
-  }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('auth-required', handleAuthRequired)
-})
-</script>
+<style scoped></style>

@@ -1,74 +1,97 @@
 package com.guobang.transport.report;
 
+import com.guobang.transport.common.BusinessException;
 import com.guobang.transport.common.DateRange;
-import com.guobang.transport.common.DateSupport;
 import com.guobang.transport.db.DbSupport;
-import java.util.ArrayList;
+import com.guobang.transport.mapper.ReportMapper;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.jdbc.core.JdbcTemplate;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+/**
+ * 月度报表服务，负责按公司、收货单位等维度统计运输数据
+ */
 @Service
+@RequiredArgsConstructor
 public class ReportService {
-    private final JdbcTemplate jdbc;
+    private final ReportMapper reportMapper;
 
-    public ReportService(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
-
-    public Map<String, Object> monthly(String month, String sender, String receiver, String company, String plateNo) {
-        DateRange range = DateSupport.monthBounds(month);
-        List<String> where = new ArrayList<>(List.of("record_date >= ? AND record_date < ?"));
-        List<Object> params = new ArrayList<>(List.of(range.start(), range.end()));
-        addEquals(where, params, "sender", sender);
-        addEquals(where, params, "receiver", receiver);
-        addEquals(where, params, "company", company);
-        addEquals(where, params, "plate_no", plateNo);
-        String whereClause = String.join(" AND ", where);
-        List<Map<String, Object>> groups = DbSupport.normalizeRows(jdbc.queryForList(
-                """
-                SELECT company, sender, receiver, plate_no,
-                       COUNT(*) as trips,
-                       COALESCE(SUM(net_weight), 0) as total_weight,
-                       COALESCE(AVG(CASE WHEN freight_rate IS NOT NULL THEN freight_rate + COALESCE(detour_surcharge, 0) END), 0) as avg_rate,
-                       COALESCE(SUM(total_cost), 0) as total_freight
-                FROM records
-                """
-                + "WHERE " + whereClause + "\n"
-                + """
-                GROUP BY company, sender, receiver, plate_no
-                ORDER BY total_freight DESC
-                """,
-                params.toArray()
-        ));
-        Map<String, Object> grand = DbSupport.normalizeRow(jdbc.queryForMap(
-                """
-                SELECT COUNT(*) as trips,
-                       COALESCE(SUM(net_weight), 0) as total_weight,
-                       COALESCE(SUM(total_cost), 0) as total_freight,
-                       COALESCE(SUM(CASE WHEN reviewed=1 THEN 1 ELSE 0 END), 0) as reviewed_count,
-                       COALESCE(SUM(CASE WHEN reviewed=0 THEN 1 ELSE 0 END), 0) as unreviewed_count
-                FROM records
-                """
-                + "WHERE " + whereClause,
-                params.toArray()
-        ));
-        return Map.of(
-                "month", month,
-                "sender", sender == null ? "" : sender,
-                "receiver", receiver == null ? "" : receiver,
-                "company", company == null ? "" : company,
-                "plate_no", plateNo == null ? "" : plateNo,
-                "groups", groups,
-                "grand_total", grand
-        );
-    }
-
-    private static void addEquals(List<String> where, List<Object> params, String column, String value) {
-        if (value != null && !value.isBlank()) {
-            where.add(column + "=?");
-            params.add(value);
+    /**
+     * 生成月度报表
+     *
+     * @param month    月份（yyyy-MM）
+     * @param onDate   指定日期
+     * @param start    开始日期
+     * @param end      结束日期
+     * @param keyword  搜索关键词
+     * @param company  开单公司
+     * @param sender   发货单位
+     * @param receiver 收货单位
+     * @param plateNo  车牌号
+     * @return 月度报表数据
+     */
+    public Map<String, Object> monthly(String month, String onDate, String start, String end,
+                                        String keyword, String company, String sender, String receiver, String plateNo) {
+        // 优先级：month > onDate > start/end > 默认当月
+        DateRange range;
+        if (month != null && !month.isBlank()) {
+            // 按月份解析日期范围
+            range = DateRange.parseMonth(month.trim());
+        } else if (onDate != null && !onDate.isBlank()) {
+            // 指定日期：取该日期所在月份的第一天和最后一天
+            LocalDate ld = LocalDate.parse(onDate.trim().substring(0, 10));
+            range = new DateRange(ld.withDayOfMonth(1), ld.withDayOfMonth(ld.lengthOfMonth()));
+        } else if (start != null || end != null) {
+            // 自定义起止日期
+            range = new DateRange(start == null ? null : LocalDate.parse(start.trim().substring(0, 10)),
+                    end == null ? null : LocalDate.parse(end.trim().substring(0, 10)));
+        } else {
+            // 默认取当月
+            LocalDate today = LocalDate.now();
+            range = new DateRange(today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth()));
         }
+        LocalDate startDate = range.start();
+        LocalDate endDate = range.end();
+        // 开始和结束日期不能为空
+        if (startDate == null || endDate == null) {
+            throw new BusinessException("开始日期和结束日期不能为空", HttpStatus.BAD_REQUEST);
+        }
+
+        // 对筛选条件做去空格处理
+        String co = company == null ? "" : company.trim();
+        String se = sender == null ? "" : sender.trim();
+        String re = receiver == null ? "" : receiver.trim();
+        String pl = plateNo == null ? "" : plateNo.trim();
+
+        // 判断是否有关键词搜索
+        boolean hasKw = keyword != null && !keyword.isBlank();
+        List<Map<String, Object>> rows;
+        List<Map<String, Object>> topRows;
+        Map<String, Object> totals;
+
+        // 根据是否带关键词选择不同的查询方法
+        if (hasKw) {
+            rows = reportMapper.byCompanyWithKeyword(startDate, endDate, keyword.trim(), co, se, re, pl);
+            topRows = reportMapper.top5ConsigneeWithKeyword(startDate, endDate, keyword.trim(), co, se, re, pl);
+        } else {
+            rows = reportMapper.byCompany(startDate, endDate, co, se, re, pl);
+            topRows = reportMapper.top5Consignee(startDate, endDate, co, se, re, pl);
+        }
+        // 查询汇总数据（总车次、总重量、总运费）
+        totals = reportMapper.totals(startDate, endDate, co, se, re, pl);
+
+        // 组装报表结果
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("period", Map.of("start", startDate.toString(), "end", endDate.toString()));
+        // 汇总数据为空时使用默认零值
+        Map<String, Object> gt = totals == null ? Map.of("trips", 0, "total_weight", 0, "total_freight", 0) : DbSupport.normalizeRow(totals);
+        report.put("grand_total", gt);
+        report.put("groups", DbSupport.normalizeRows(rows));
+        report.put("top5_consignee", DbSupport.normalizeRows(topRows));
+        return report;
     }
 }

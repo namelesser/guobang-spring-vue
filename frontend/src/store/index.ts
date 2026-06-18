@@ -1,6 +1,12 @@
-import { createPinia } from 'pinia'
+import type { App } from 'vue';
+import { createPinia } from 'pinia';
+import { resetSetupStore } from './plugins';
 
-const pinia = createPinia()
+/** Setup Vue store plugin pinia */
+export function setupStore(app: App) {
+  const store = createPinia();
 
-export default pinia
-export { useAppStore } from './modules/app'
+  store.use(resetSetupStore);
+
+  app.use(store);
+}
