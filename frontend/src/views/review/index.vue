@@ -10,13 +10,14 @@ import {
   reviewRecord,
   deleteRecord,
   deleteImage,
-  fetchCollections,
   fetchRates,
   lookupRate,
   updateImage,
   reocrImage
 } from '@/service/api/business';
 import { useImageEditor } from '@/hooks/business/image-editor';
+import { useCollections } from '@/hooks/business/use-collections';
+import type { FreightRate } from '@/service/api/types';
 
 type Field = {
   key: string;
@@ -52,14 +53,14 @@ const fields: Field[] = [
   { key: 'note', label: '备注', type: 'text' }
 ];
 
-const form = reactive<Record<string, any>>({});
+const form = reactive<Record<string, unknown>>({});
 fields.forEach(field => {
   form[field.key] = field.type === 'number' ? null : field.type === 'date' ? null : '';
 });
-const collectionCache: Record<string, string[]> = reactive({});
+const { collectionCache, loadCollections: loadCollectionsBase } = useCollections();
 const routeReceivers = ref<string[]>([]);
 const routeSenders = ref<string[]>([]);
-const allRates = ref<any[]>([]);
+const allRates = ref<FreightRate[]>([]);
 
 const receiverOptions = computed(() => routeReceivers.value.map(v => ({ label: v, value: v })));
 const senderOptions = computed(() => routeSenders.value.map(v => ({ label: v, value: v })));
@@ -94,13 +95,7 @@ function getOptions(field: Field) {
 
 async function loadCollections() {
   try {
-    const data = await fetchCollections();
-    for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
-      collectionCache[cat] = items
-        .map(item => String(item.value || '').trim())
-        .filter(v => v && v !== '未知')
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    }
+    await loadCollectionsBase();
     const rateData = await fetchRates();
     allRates.value = rateData.rates || rateData || [];
     updateRouteReceivers();
@@ -114,9 +109,11 @@ function updateRouteReceivers() {
   const company = String(form.company || '').trim();
   let rates = allRates.value;
   if (company) {
-    rates = rates.filter((r: any) => String(r.origin || '').trim() === company);
+    rates = rates.filter((r: FreightRate) => String(r.origin || '').trim() === company);
   }
-  const dests = [...new Set(rates.map((r: any) => String(r.destination || '').trim()).filter(Boolean))] as string[];
+  const dests = [
+    ...new Set(rates.map((r: FreightRate) => String(r.destination || '').trim()).filter(Boolean))
+  ] as string[];
   routeReceivers.value = dests.sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
@@ -124,9 +121,11 @@ function updateRouteSenders() {
   const company = String(form.company || '').trim();
   let rates = allRates.value;
   if (company) {
-    rates = rates.filter((r: any) => String(r.origin || '').trim() === company);
+    rates = rates.filter((r: FreightRate) => String(r.origin || '').trim() === company);
   }
-  const senders = [...new Set(rates.map((r: any) => String(r.sender || '').trim()).filter(Boolean))] as string[];
+  const senders = [
+    ...new Set(rates.map((r: FreightRate) => String(r.sender || '').trim()).filter(Boolean))
+  ] as string[];
   routeSenders.value = senders.sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
@@ -148,7 +147,7 @@ function onFieldChange(key: string) {
   }
 }
 
-function syncForm(row: any) {
+function syncForm(row: Record<string, unknown>) {
   fields.forEach(field => {
     if (field.type === 'number') {
       form[field.key] = row?.[field.key] == null ? null : Number(row[field.key]);
@@ -164,7 +163,7 @@ function syncForm(row: any) {
 async function lookupRateForForm() {
   const company = String(form.company || '').trim();
   const receiver = String(form.receiver || '').trim();
-  const date = form.record_date ? new Date(form.record_date).toISOString().split('T')[0] : '';
+  const date = form.record_date ? new Date(String(form.record_date)).toISOString().split('T')[0] : '';
   if (!company || !receiver || !date) return;
   try {
     const data = await lookupRate({ origin: company, destination: receiver, date });
@@ -199,9 +198,9 @@ async function refreshList() {
   records.value = data.records || [];
 }
 
-async function loadRecord(row: any) {
+async function loadRecord(row: Record<string, unknown>) {
   imageId.value =
-    row.first_image_id ||
+    String(row.first_image_id || '') ||
     String(row.image_id || '')
       .split(',')[0]
       .trim();
@@ -222,7 +221,7 @@ async function loadCurrent() {
     if (queryId) {
       const data = await fetchRecord(queryId);
       await refreshList();
-      await loadRecord(data.record || data);
+      await loadRecord((data.record || data) as unknown as Record<string, unknown>);
     } else {
       await refreshList();
       if (records.value.length === 0) {
@@ -291,8 +290,9 @@ async function save() {
     await updateRecord(record.id, buildBody());
     message.success('已保存');
     await loadCurrent();
-  } catch (error: any) {
-    message.error(error?.message || '保存失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '保存失败');
   } finally {
     saving.value = false;
   }
@@ -321,8 +321,9 @@ async function markReviewed() {
       imageId.value = '';
       imageBase64.value = '';
     }
-  } catch (error: any) {
-    message.error(error?.message || '核对失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '核对失败');
   } finally {
     saving.value = false;
   }
@@ -347,8 +348,9 @@ async function deleteCurrent() {
       imageId.value = '';
       imageBase64.value = '';
     }
-  } catch (error: any) {
-    message.error(error?.message || '删除失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '删除失败');
   }
 }
 
@@ -357,8 +359,9 @@ async function reocr() {
   try {
     await reocrImage(Number(imageId.value));
     message.success('已加入 OCR 队列');
-  } catch (error: any) {
-    message.error(error?.message || '重新 OCR 失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '重新 OCR 失败');
   }
 }
 
@@ -425,34 +428,49 @@ watch(
                   <NFormItem :label="field.label">
                     <NSelect
                       v-if="field.type === 'select'"
-                      v-model:value="form[field.key]"
+                      :value="(form[field.key] as string | number | null)"
                       :options="getOptions(field)"
                       clearable
                       filterable
-                      @update:value="onFieldChange(field.key)"
+                      @update:value="
+                        (v: string | number | null) => {
+                          form[field.key] = v;
+                          onFieldChange(field.key);
+                        }
+                      "
                     />
                     <NDatePicker
                       v-else-if="field.type === 'date'"
-                      v-model:formatted-value="form[field.key]"
+                      :formatted-value="(form[field.key] as string | null)"
                       type="date"
                       value-format="yyyy-MM-dd"
                       style="width: 100%"
                       :is-date-disabled="(ts: number) => ts > Date.now()"
-                      @update:formatted-value="onFieldChange(field.key)"
+                      @update:formatted-value="
+                        (v: string | null) => {
+                          form[field.key] = v;
+                          onFieldChange(field.key);
+                        }
+                      "
                     />
                     <NInputNumber
                       v-else-if="field.type === 'number'"
-                      v-model:value="form[field.key]"
+                      :value="(form[field.key] as number | null)"
                       :precision="2"
                       :step="0.01"
                       :readonly="field.readonly"
                       :show-button="!field.readonly"
                       style="width: 100%"
-                      @update:value="onFieldChange(field.key)"
+                      @update:value="
+                        (v: number | null) => {
+                          form[field.key] = v;
+                          onFieldChange(field.key);
+                        }
+                      "
                     />
                     <NInput
                       v-else
-                      v-model:value="form[field.key]"
+                      :value="String(form[field.key] || '')"
                       :readonly="field.readonly"
                       @change="onFieldChange(field.key)"
                     />

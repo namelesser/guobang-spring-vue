@@ -3,27 +3,29 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import { useRouter } from 'vue-router';
 import { useMessage, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchReport, fetchCollections } from '@/service/api/business';
+import { fetchReport } from '@/service/api/business';
+import { useCollections } from '@/hooks/business/use-collections';
+import { currentMonth, fmtNum } from '@/utils/business';
 
 defineOptions({ name: 'Report' });
 
 const router = useRouter();
 const message = useMessage();
 const loading = ref(false);
-const report = ref<any>(null);
+const report = ref<Record<string, unknown> | null>(null);
 let reportTimer: number | null = null;
 let requestSeq = 0;
-const collectionCache: Record<string, string[]> = reactive({});
-const filters = reactive({ month: getCurrentMonth(), company: '', sender: '', receiver: '', plate: '' });
+const { loadCollections, optionsFor } = useCollections();
+const filters = reactive({ month: currentMonth(), company: '', sender: '', receiver: '', plate: '' });
 
-const gt = computed(() => report.value?.grand_total || {});
+const gt = computed(() => (report.value?.grand_total as Record<string, unknown>) || {});
 const avgRate = computed(() => {
   const weight = Number(gt.value.total_weight || 0);
   const freight = Number(gt.value.total_freight || 0);
   return weight ? (freight / weight).toFixed(2) : '0.00';
 });
 
-const opts = (cat: string) => computed(() => (collectionCache[cat] || []).map(value => ({ label: value, value })));
+const opts = (cat: string) => computed(() => optionsFor(cat));
 const companyOptions = opts('company');
 const senderOptions = opts('sender');
 const receiverOptions = opts('receiver');
@@ -35,9 +37,9 @@ const columns: DataTableColumns<any> = [
   { title: '收货单位', key: 'receiver', minWidth: 160 },
   { title: '车牌号', key: 'plate_no', width: 120 },
   { title: '车次', key: 'trips', width: 80, align: 'center' },
-  { title: '总净重', key: 'total_weight', width: 120, align: 'right', render: row => formatNum(row.total_weight) },
-  { title: '总运费', key: 'total_freight', width: 120, align: 'right', render: row => formatNum(row.total_freight) },
-  { title: '均价', key: 'avg_rate', width: 100, align: 'right', render: row => formatNum(row.avg_rate) },
+  { title: '总净重', key: 'total_weight', width: 120, align: 'right', render: row => fmtNum(row.total_weight) },
+  { title: '总运费', key: 'total_freight', width: 120, align: 'right', render: row => fmtNum(row.total_freight) },
+  { title: '均价', key: 'avg_rate', width: 100, align: 'right', render: row => fmtNum(row.avg_rate) },
   {
     title: '操作',
     key: 'actions',
@@ -46,29 +48,6 @@ const columns: DataTableColumns<any> = [
     render: row => h(NButton, { size: 'small', type: 'primary', onClick: () => goRecords(row) }, () => '明细')
   }
 ];
-
-function formatNum(value: any) {
-  return Number(value || 0).toFixed(2);
-}
-
-function getCurrentMonth() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
-async function loadCollections() {
-  try {
-    const data = await fetchCollections();
-    for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
-      collectionCache[cat] = items
-        .map(item => String(item.value || '').trim())
-        .filter(v => v && v !== '未知')
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    }
-  } catch (e) {
-    console.error('加载基础资料失败:', e);
-  }
-}
 
 async function loadReport() {
   if (!filters.month) {
@@ -79,9 +58,10 @@ async function loadReport() {
   loading.value = true;
   try {
     const data = await fetchReport(buildReportParams());
-    if (seq === requestSeq) report.value = data;
-  } catch (error: any) {
-    if (seq === requestSeq) message.error(error?.message || '查询失败');
+    if (seq === requestSeq) report.value = data as unknown as Record<string, unknown>;
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (seq === requestSeq) message.error(err?.message || '查询失败');
   } finally {
     if (seq === requestSeq) loading.value = false;
   }
@@ -100,13 +80,13 @@ function resetFilters() {
   Object.assign(filters, { company: '', sender: '', receiver: '', plate: '' });
 }
 
-function goRecords(group: any = null) {
+function goRecords(group: Record<string, unknown> | null = null) {
   const query: Record<string, string> = {};
   if (filters.month) query.month = filters.month;
-  const company = group?.company || filters.company;
-  const sender = group?.sender || filters.sender;
-  const receiver = group?.receiver || filters.receiver;
-  const plate = group?.plate_no || filters.plate;
+  const company = String(group?.company || filters.company || '');
+  const sender = String(group?.sender || filters.sender || '');
+  const receiver = String(group?.receiver || filters.receiver || '');
+  const plate = String(group?.plate_no || filters.plate || '');
   if (company) query.company = company;
   if (sender) query.sender = sender;
   if (receiver) query.receiver = receiver;
@@ -204,12 +184,12 @@ watch(filters, () => {
         </NGi>
         <NGi>
           <NCard embedded>
-            <NStatistic label="总净重(吨)">{{ formatNum(gt.total_weight) }}</NStatistic>
+            <NStatistic label="总净重(吨)">{{ fmtNum(gt.total_weight) }}</NStatistic>
           </NCard>
         </NGi>
         <NGi>
           <NCard embedded>
-            <NStatistic label="总运费(元)">{{ formatNum(gt.total_freight) }}</NStatistic>
+            <NStatistic label="总运费(元)">{{ fmtNum(gt.total_freight) }}</NStatistic>
           </NCard>
         </NGi>
         <NGi>
@@ -222,9 +202,9 @@ watch(filters, () => {
       <NSpin :show="loading">
         <NDataTable
           :columns="columns"
-          :data="report?.groups || []"
+          :data="(report?.groups as any[]) || []"
           :loading="loading"
-          :row-key="(row: any) => row.company + row.receiver"
+          :row-key="(row: Record<string, unknown>) => String(row.company) + String(row.receiver)"
           striped
         />
       </NSpin>

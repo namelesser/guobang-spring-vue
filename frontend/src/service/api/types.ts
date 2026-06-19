@@ -137,27 +137,25 @@ export interface DataQualityCheck {
 }
 
 export interface DataQualityResponse {
-  future_dates: any[];
-  missing_images: any[];
-  missing_weights: any[];
-  missing_rates: any[];
-  stale_ocr_tasks: any[];
-  duplicate_orders: any[];
-  sender_company_mismatch: any[];
-  receiver_not_in_collection: any[];
-  plate_no_not_in_collection: any[];
-  collection_checks: { field: string; label: string; items: any[] }[];
+  future_dates: TransportRecord[];
+  missing_images: TransportRecord[];
+  missing_weights: TransportRecord[];
+  missing_rates: TransportRecord[];
+  stale_ocr_tasks: TransportRecord[];
+  duplicate_orders: TransportRecord[];
+  sender_company_mismatch: TransportRecord[];
+  collection_checks: Array<{ field: string; label: string; items: TransportRecord[] }>;
   report?: {
-    future_dates: any[];
-    missing_images: any[];
-    missing_weights: any[];
-    missing_rates: any[];
-    stale_ocr_tasks: any[];
-    duplicate_orders: any[];
-    sender_company_mismatch: any[];
-    receiver_not_in_collection: any[];
-    plate_no_not_in_collection: any[];
-    collection_checks: { field: string; label: string; items: any[] }[];
+    future_dates: TransportRecord[];
+    missing_images: TransportRecord[];
+    missing_weights: TransportRecord[];
+    missing_rates: TransportRecord[];
+    stale_ocr_tasks: TransportRecord[];
+    duplicate_orders: TransportRecord[];
+    sender_company_mismatch: TransportRecord[];
+    receiver_not_in_collection: TransportRecord[];
+    plate_no_not_in_collection: TransportRecord[];
+    collection_checks: Array<{ field: string; label: string; items: TransportRecord[] }>;
   };
 }
 

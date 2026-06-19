@@ -3,7 +3,9 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import { useRoute, useRouter } from 'vue-router';
 import { useMessage, NButton, NPopconfirm, NTag } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchRecords, createRecord, deleteRecord, fetchCollections, fetchImage } from '@/service/api/business';
+import { fetchRecords, createRecord, deleteRecord, fetchImage } from '@/service/api/business';
+import { useCollections } from '@/hooks/business/use-collections';
+import { today, monthOptions, fmtNum, firstImageId, downloadExport } from '@/utils/business';
 
 defineOptions({ name: 'Records' });
 
@@ -17,13 +19,24 @@ const saving = ref(false);
 const rows = ref<any[]>([]);
 const total = ref(0);
 const page = ref(1);
-const createOpen = ref(false);
-const viewerOpen = ref(false);
-const viewer = reactive({ record: null as any, index: 0, image: '' });
-const collectionCache: Record<string, string[]> = reactive({});
 let searchTimer: number | null = null;
 let abortController: AbortController | null = null;
 let applyingRouteQuery = false;
+const createOpen = ref(false);
+const createForm = reactive({
+  record_date: today(),
+  order_no: '',
+  sender: '',
+  receiver: '',
+  company: '',
+  plate_no: '',
+  net_weight: null as number | null,
+  detour_surcharge: 0 as number,
+  note: ''
+});
+const viewerOpen = ref(false);
+const viewer = reactive({ record: null as Record<string, unknown> | null, index: 0, image: '' });
+const { loadCollections, optionsFor } = useCollections();
 
 const filters = reactive({
   month: '',
@@ -36,52 +49,22 @@ const filters = reactive({
   orderNo: ''
 });
 
-const createForm = reactive({
-  record_date: null as string | null,
-  order_no: '',
-  sender: '',
-  receiver: '',
-  carrier: '',
-  company: '',
-  material: '',
-  origin: '',
-  destination: '',
-  plate_no: '',
-  gross_weight: null as number | null,
-  tare_weight: null as number | null,
-  net_weight: null as number | null,
-  freight: null as number | null,
-  detour_surcharge: null as number | null,
-  note: '',
-  reviewed: 0
-});
-
 const reviewOptions = [
   { label: '已核对', value: '1' },
   { label: '未核对', value: '0' }
 ];
 
 const sourceOptions = [
-  { label: '手动录入', value: 'manual' },
-  { label: 'OCR 扫描', value: 'ocr' }
+  { label: 'OCR', value: 'ocr' },
+  { label: '手动', value: 'manual' }
 ];
 
-const monthOptions = computed(() => {
-  const months = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    months.push({ label: value, value });
-  }
-  return months;
-});
-
-const opts = (cat: string) => computed(() => (collectionCache[cat] || []).map(v => ({ label: v, value: v })));
+const opts = (cat: string) => computed(() => optionsFor(cat));
 const companyOptions = opts('company');
 const senderOptions = opts('sender');
 const receiverOptions = opts('receiver');
 const plateOptions = opts('plate_no');
+const monthOpts = monthOptions();
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 const reviewedCount = computed(() => rows.value.filter(row => row.reviewed).length);
@@ -159,38 +142,6 @@ const columns: DataTableColumns<any> = [
   }
 ];
 
-function fmtNum(v: any) {
-  return v == null || v === '' ? '' : Number(v).toFixed(2);
-}
-
-function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function firstImageId(record: any) {
-  return (
-    record.first_image_id ||
-    String(record.image_id || '')
-      .split(',')[0]
-      .trim()
-  );
-}
-
-async function loadCollections() {
-  try {
-    const data = await fetchCollections();
-    for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
-      collectionCache[cat] = items
-        .map(item => String(item.value || '').trim())
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    }
-  } catch (e) {
-    console.error('加载基础资料失败:', e);
-  }
-}
-
 function buildParams(includePaging = true) {
   const params: Record<string, string> = {};
   if (filters.month) params.month = filters.month;
@@ -218,8 +169,9 @@ async function search() {
     const data = await fetchRecords(buildParams(), abortController.signal);
     rows.value = data.records || [];
     total.value = data.total || 0;
-  } catch (error: any) {
-    if (error.name !== 'AbortError') message.error(error?.message || '查询失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.name !== 'AbortError') message.error(err?.message || '查询失败');
   } finally {
     loading.value = false;
   }
@@ -255,21 +207,15 @@ async function exportRecords(format: 'xls' | 'csv') {
   params.format = format;
   try {
     const url = '/api/records/export?' + new URLSearchParams(params).toString();
-    const response = await fetch(url, { credentials: 'include' });
-    const blob = await response.blob();
-    const a = document.createElement('a');
-    const objectUrl = URL.createObjectURL(blob);
-    a.href = objectUrl;
-    a.download = `records.${format}`;
-    a.click();
-    URL.revokeObjectURL(objectUrl);
+    await downloadExport(url, `records.${format}`);
     message.success('导出已开始');
-  } catch (error: any) {
-    message.error(error?.message || '导出失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '导出失败');
   }
 }
 
-async function openViewer(row: any) {
+async function openViewer(row: Record<string, unknown>) {
   viewer.record = row;
   viewer.index = rows.value.indexOf(row);
   viewer.image = '';
@@ -326,8 +272,9 @@ async function handleCreate() {
     message.success('记录已创建');
     createOpen.value = false;
     search();
-  } catch (error: any) {
-    message.error(error?.message || '创建失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '创建失败');
   } finally {
     saving.value = false;
   }
@@ -338,8 +285,9 @@ async function handleDelete(id: number) {
     await deleteRecord(id);
     message.success('记录已删除');
     search();
-  } catch (error: any) {
-    message.error(error?.message || '删除失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '删除失败');
   }
 }
 
@@ -424,7 +372,7 @@ onBeforeUnmount(() => {
                 v-model:value="filters.month"
                 clearable
                 placeholder="选择月份"
-                :options="monthOptions"
+                :options="monthOpts"
                 style="width: 140px"
               />
             </NFormItem>
@@ -500,7 +448,7 @@ onBeforeUnmount(() => {
         :columns="columns"
         :data="rows"
         :loading="loading"
-        :row-key="(row: any) => row.id"
+        :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
         :max-height="600"
         remote
         striped

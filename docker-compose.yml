@@ -8,9 +8,7 @@ services:
     environment:
       POSTGRES_DB: transport
       POSTGRES_USER: transport
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-552300}
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?请设置 PG_PASSWORD 环境变量}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +16,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
   # 后端服务
   backend:
@@ -31,9 +34,9 @@ services:
       PG_PORT: 5432
       PG_DATABASE: transport
       PG_USER: transport
-      PG_PASSWORD: ${PG_PASSWORD:-552300}
-      TRANSPORT_AUTH_SECRET: ${TRANSPORT_AUTH_SECRET:-guobang-secret-key-2024}
-      TRANSPORT_AUTH_PASSWORD: ${TRANSPORT_AUTH_PASSWORD:-552300}
+      PG_PASSWORD: ${PG_PASSWORD:?请设置 PG_PASSWORD 环境变量}
+      TRANSPORT_AUTH_SECRET: ${TRANSPORT_AUTH_SECRET:?请设置 TRANSPORT_AUTH_SECRET 环境变量}
+      TRANSPORT_AUTH_PASSWORD: ${TRANSPORT_AUTH_PASSWORD:?请设置 TRANSPORT_AUTH_PASSWORD 环境变量}
       FLYWAY_ENABLED: "true"
     ports:
       - "8000:8000"
@@ -41,6 +44,11 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
 
   # 前端服务
   frontend:
@@ -53,6 +61,11 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   postgres_data:

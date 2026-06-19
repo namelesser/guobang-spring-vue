@@ -1,7 +1,7 @@
 {
-  "name": "soybean-admin",
-  "version": "2.2.0",
-  "description": "A fresh and elegant admin template, based on Vue3、Vite8、TypeScript、NaiveUI and UnoCSS. 一个基于Vue3、Vite8、TypeScript、NaiveUI and UnoCSS的清新优雅的中后台模版。",
+  "name": "guobang-transport-frontend",
+  "version": "1.0.0",
+  "description": "国邦运输管理系统前端 - 基于 Vue3、Vite8、TypeScript、NaiveUI",
   "keywords": [
     "TypeScript",
     "UnoCSS",
