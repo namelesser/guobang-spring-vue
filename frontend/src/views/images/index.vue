@@ -31,7 +31,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 // 表格高度自适应窗口
 const tableMaxHeight = ref(500);
 function updateTableHeight() {
-  tableMaxHeight.value = Math.max(300, window.innerHeight - 326);
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 260);
 }
 onMounted(() => {
   updateTableHeight();

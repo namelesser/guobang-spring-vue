@@ -73,8 +73,8 @@ const unreviewedCount = computed(() => rows.value.filter(row => !row.reviewed).l
 // 表格高度自适应窗口
 const tableMaxHeight = ref(500);
 function updateTableHeight() {
-  // 视口高度 - 顶部导航(64) - 卡片标题(56) - 筛选栏(约70) - 分页(56) - 间距(80)
-  tableMaxHeight.value = Math.max(300, window.innerHeight - 326);
+  // 视口高度 - 顶部导航(64) - 卡片标题(56) - 筛选栏(约70) - 分页(56) - 间距(60)
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 260);
 }
 onMounted(() => {
   updateTableHeight();
