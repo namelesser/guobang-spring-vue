@@ -283,8 +283,8 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto h-full">
-    <NCard title="运价资料" :bordered="false" size="small" class="flex-1-hidden">
+  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+    <NCard title="运价资料" :bordered="false" size="small">
       <template #header-extra>
         <NSpace>
           <NButton @click="loadAll">刷新</NButton>
@@ -429,10 +429,8 @@ onMounted(loadAll);
       </NSpace>
 
       <!-- 运价列表 -->
-      <NCard title="线路运价" content-style="padding: 0" class="flex-1-hidden">
-        <div class="flex-1-hidden">
-          <NDataTable :columns="rateColumns" :data="filteredRates" :row-key="(row: FreightRate) => row.id" striped flex-height />
-        </div>
+      <NCard title="线路运价" content-style="padding: 0">
+        <NDataTable :columns="rateColumns" :data="filteredRates" :row-key="(row: FreightRate) => row.id" striped />
         <div class="flex justify-end p-12px">
           <NPagination v-model:page="page" :page-size="pageSize" :item-count="total" @update:page="loadRates" />
         </div>

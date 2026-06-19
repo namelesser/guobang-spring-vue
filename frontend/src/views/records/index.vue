@@ -70,6 +70,20 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 const reviewedCount = computed(() => rows.value.filter(row => row.reviewed).length);
 const unreviewedCount = computed(() => rows.value.filter(row => !row.reviewed).length);
 
+// 表格高度自适应窗口
+const tableMaxHeight = ref(500);
+function updateTableHeight() {
+  // 视口高度 - 顶部导航(64) - 卡片标题(56) - 筛选栏(约70) - 分页(56) - 间距(60)
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 260);
+}
+onMounted(() => {
+  updateTableHeight();
+  window.addEventListener('resize', updateTableHeight);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTableHeight);
+});
+
 const detailGroups = [
   {
     title: '基本信息',
@@ -346,8 +360,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto h-full">
-    <NCard title="运输记录" :bordered="false" size="small" class="flex-1-hidden">
+  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+    <NCard title="运输记录" :bordered="false" size="small">
       <template #header-extra>
         <NSpace>
           <NButton type="primary" @click="openCreate">手动录入</NButton>
@@ -459,20 +473,17 @@ onBeforeUnmount(() => {
         </NForm>
       </NSpace>
 
-      <!-- 表格容器 -->
-      <div class="flex-1-hidden">
-        <NDataTable
-          :columns="columns"
-          :data="rows"
-          :loading="loading"
-          :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
-          :row-class-name="() => 'record-row'"
-          remote
-          striped
-          size="medium"
-          flex-height
-        />
-      </div>
+      <NDataTable
+        :columns="columns"
+        :data="rows"
+        :loading="loading"
+        :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
+        :max-height="tableMaxHeight"
+        :row-class-name="() => 'record-row'"
+        remote
+        striped
+        size="medium"
+      />
 
       <NSpace justify="center" class="mt-16px">
         <NPagination v-model:page="page" :page-count="totalPages" :page-size="PAGE_SIZE" @update:page="goPage" />

@@ -166,8 +166,8 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto h-full">
-    <NCard title="基础资料 / 车辆管理" :bordered="false" size="small" class="flex-1-hidden">
+  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+    <NCard title="基础资料 / 车辆管理" :bordered="false" size="small">
       <template #header-extra>
         <NButton @click="loadAll">刷新</NButton>
       </template>
@@ -213,17 +213,14 @@ onMounted(loadAll);
       </NSpace>
 
       <!-- 列表 -->
-      <NCard :title="currentTitle" content-style="padding: 0" class="flex-1-hidden">
-        <div class="flex-1-hidden">
-          <NDataTable
-            :columns="columns"
-            :data="filteredItems"
-            :loading="loading"
-            :row-key="(row: any) => row.id"
-            striped
-            flex-height
-          />
-        </div>
+      <NCard :title="currentTitle" content-style="padding: 0">
+        <NDataTable
+          :columns="columns"
+          :data="filteredItems"
+          :loading="loading"
+          :row-key="(row: any) => row.id"
+          striped
+        />
         <div class="flex justify-end p-12px">
           <NPagination v-model:page="page" :page-size="pageSize" :item-count="total" @update:page="loadItems" />
         </div>
