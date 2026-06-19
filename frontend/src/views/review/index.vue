@@ -396,9 +396,9 @@ watch(
         </NSpace>
       </template>
 
-      <NEmpty v-if="!loading && records.length === 0" description="当前没有待核对记录" style="padding: 80px 0" />
+      <NEmpty v-if="!loading && records.length === 0" key="empty" description="当前没有待核对记录" style="padding: 80px 0" />
 
-      <NSpin v-else :show="loading">
+      <NSpin v-else key="content" :show="loading">
         <div style="display: grid; grid-template-columns: minmax(460px, 1.05fr) minmax(440px, 0.95fr); gap: 16px">
           <!-- 图片区 -->
           <NCard>
@@ -415,8 +415,8 @@ watch(
               </NSpace>
             </template>
             <div style="text-align: center; min-height: 300px">
-              <img v-if="imageBase64" :src="imageBase64" style="max-width: 100%; max-height: 60vh" />
-              <NEmpty v-else description="暂无图片" />
+              <img v-if="imageBase64" key="image" :src="imageBase64" style="max-width: 100%; max-height: 60vh" />
+              <NEmpty v-else key="empty" description="暂无图片" />
             </div>
           </NCard>
 
