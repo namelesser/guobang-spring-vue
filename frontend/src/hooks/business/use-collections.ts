@@ -7,7 +7,9 @@ export function useCollections() {
   async function loadCollections(filterUnknown = false) {
     try {
       const data = await fetchCollections();
-      for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
+      const collections = data.collections || {};
+      for (const [cat, items] of Object.entries(collections) as [string, any[]][]) {
+        if (!Array.isArray(items)) continue;
         collectionCache[cat] = items
           .map(item => String(item.value || '').trim())
           .filter(v => (filterUnknown ? v && v !== '未知' : Boolean(v)))

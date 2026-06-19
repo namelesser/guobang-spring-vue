@@ -97,7 +97,7 @@ async function loadCollections() {
   try {
     await loadCollectionsBase();
     const rateData = await fetchRates();
-    allRates.value = rateData.rates || rateData || [];
+    allRates.value = rateData.items || rateData.rates || [];
     updateRouteReceivers();
     updateRouteSenders();
   } catch (e) {
