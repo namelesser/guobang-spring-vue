@@ -17,12 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class RecordService {
     private static final List<String> UPDATABLE = List.of(
             "file_name", "image_id", "record_date", "order_no", "sender", "receiver", "company",
@@ -40,12 +42,6 @@ public class RecordService {
     private final JdbcTemplate jdbc;
     private final CollectionService collectionService;
     private final RateService rateService;
-
-    public RecordService(JdbcTemplate jdbc, CollectionService collectionService, RateService rateService) {
-        this.jdbc = jdbc;
-        this.collectionService = collectionService;
-        this.rateService = rateService;
-    }
 
     @Transactional
     public int createManual(Map<String, Object> body) {
@@ -502,7 +498,9 @@ public class RecordService {
         }
         if (has(filters, "reviewed")) {
             where.add("reviewed=?");
-            params.add(Integer.parseInt(filters.get("reviewed")));
+            String val = filters.get("reviewed").toLowerCase().trim();
+            // 支持 "true"/"false" 和 "1"/"0" 两种格式
+            params.add("true".equals(val) ? 1 : "false".equals(val) ? 0 : Integer.parseInt(val));
         }
         if (has(filters, "source")) {
             where.add("source=?");
