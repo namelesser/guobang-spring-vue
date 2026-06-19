@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { useMessage } from 'naive-ui';
+import { useMessage, NTag } from 'naive-ui';
 import {
   fetchUnreviewedRecords,
   fetchRecord,
