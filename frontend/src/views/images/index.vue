@@ -28,6 +28,19 @@ const filters = reactive({
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 
+// 表格高度自适应窗口
+const tableMaxHeight = ref(500);
+function updateTableHeight() {
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 326);
+}
+onMounted(() => {
+  updateTableHeight();
+  window.addEventListener('resize', updateTableHeight);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTableHeight);
+});
+
 const monthOptions = getMonthOptions();
 
 const statusOptions = [
@@ -309,7 +322,7 @@ onBeforeUnmount(() => {
         :data="rows"
         :loading="loading"
         :row-key="(row: any) => row.id"
-        :max-height="600"
+        :max-height="tableMaxHeight"
         remote
         striped
       />

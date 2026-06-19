@@ -70,6 +70,20 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 const reviewedCount = computed(() => rows.value.filter(row => row.reviewed).length);
 const unreviewedCount = computed(() => rows.value.filter(row => !row.reviewed).length);
 
+// 表格高度自适应窗口
+const tableMaxHeight = ref(500);
+function updateTableHeight() {
+  // 视口高度 - 顶部导航(64) - 卡片标题(56) - 筛选栏(约70) - 分页(56) - 间距(80)
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 326);
+}
+onMounted(() => {
+  updateTableHeight();
+  window.addEventListener('resize', updateTableHeight);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTableHeight);
+});
+
 const detailGroups = [
   {
     title: '基本信息',
@@ -464,7 +478,7 @@ onBeforeUnmount(() => {
         :data="rows"
         :loading="loading"
         :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
-        :max-height="650"
+        :max-height="tableMaxHeight"
         :row-class-name="() => 'record-row'"
         remote
         striped
