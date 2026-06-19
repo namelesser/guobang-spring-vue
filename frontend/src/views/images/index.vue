@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useMessage, NButton, NSpace, NPopconfirm, NTag } from 'naive-ui';
+import { useMessage, NButton, NSpace, NPopconfirm, NTag, NTooltip } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { fetchImages, fetchImage, deleteImage, updateImage, reocrImage, rereviewImage } from '@/service/api/business';
 import type { ImageAsset } from '@/service/api/types';
