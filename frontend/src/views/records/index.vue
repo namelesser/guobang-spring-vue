@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useMessage, NButton, NPopconfirm, NTag } from 'naive-ui';
+import { useMessage, NButton, NPopconfirm, NTag, NCard, NDescriptions, NDescriptionsItem } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { fetchRecords, createRecord, deleteRecord, fetchImage } from '@/service/api/business';
 import { useCollections } from '@/hooks/business/use-collections';
@@ -70,21 +70,36 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 const reviewedCount = computed(() => rows.value.filter(row => row.reviewed).length);
 const unreviewedCount = computed(() => rows.value.filter(row => !row.reviewed).length);
 
-const detailFields: [string, string][] = [
-  ['record_date', '日期'],
-  ['order_no', '单号'],
-  ['sender', '发货单位'],
-  ['receiver', '收货单位'],
-  ['company', '开单公司'],
-  ['plate_no', '车牌号'],
-  ['net_weight', '净重'],
-  ['freight_rate', '运费单价'],
-  ['detour_surcharge', '绕路加价'],
-  ['total_cost', '总费用'],
-  ['source', '来源'],
-  ['ocr_status', 'OCR状态'],
-  ['review_note', '审核备注'],
-  ['note', '备注']
+const detailGroups = [
+  {
+    title: '基本信息',
+    fields: [
+      ['record_date', '日期'],
+      ['order_no', '单号'],
+      ['company', '开单公司'],
+      ['sender', '发货单位'],
+      ['receiver', '收货单位'],
+      ['plate_no', '车牌号']
+    ] as [string, string][]
+  },
+  {
+    title: '费用信息',
+    fields: [
+      ['net_weight', '净重'],
+      ['freight_rate', '运费单价'],
+      ['detour_surcharge', '绕路加价'],
+      ['total_cost', '总费用']
+    ] as [string, string][]
+  },
+  {
+    title: '状态信息',
+    fields: [
+      ['source', '来源'],
+      ['ocr_status', 'OCR状态'],
+      ['review_note', '审核备注'],
+      ['note', '备注']
+    ] as [string, string][]
+  }
 ];
 
 const columns: DataTableColumns<any> = [
@@ -462,21 +477,46 @@ onBeforeUnmount(() => {
     <!-- 详情弹窗 -->
     <NModal v-model:show="viewerOpen" preset="card" title="记录详情" style="width: 92vw">
       <template v-if="viewer.record">
-        <NSpace justify="space-between" align="center" style="margin-bottom: 12px">
+        <!-- 翻页导航 -->
+        <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
           <NButton :disabled="viewer.index <= 0" @click="viewerMove(-1)">上一条</NButton>
           <NText depth="3">ID {{ viewer.record.id }} · {{ viewer.index + 1 }} / {{ rows.length }}</NText>
           <NButton :disabled="viewer.index >= rows.length - 1" @click="viewerMove(1)">下一条</NButton>
         </NSpace>
-        <div style="display: grid; grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr); gap: 16px">
-          <div style="text-align: center">
-            <img v-if="viewer.image" :src="viewer.image" style="max-width: 100%; max-height: 60vh" />
+
+        <!-- 主内容区：左图右表 -->
+        <div style="display: grid; grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr); gap: 20px">
+          <!-- 左侧：图片 -->
+          <div style="text-align: center; background: #f8f9fa; border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: center; min-height: 300px">
+            <img v-if="viewer.image" :src="viewer.image" style="max-width: 100%; max-height: 60vh; border-radius: 4px" />
             <NEmpty v-else description="暂无图片" />
           </div>
-          <NDescriptions :column="1" bordered size="small">
-            <NDescriptionsItem v-for="[key, label] in detailFields" :key="key" :label="label">
-              {{ viewer.record[key] ?? '' }}
-            </NDescriptionsItem>
-          </NDescriptions>
+
+          <!-- 右侧：分组详情 -->
+          <div style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 60vh">
+            <NCard v-for="group in detailGroups" :key="group.title" :title="group.title" size="small" :bordered="true">
+              <NDescriptions :column="2" label-placement="left" size="small">
+                <NDescriptionsItem v-for="[key, label] in group.fields" :key="key" :label="label" :span="key === 'note' || key === 'review_note' ? 2 : 1">
+                  <template v-if="key === 'net_weight' || key === 'freight_rate' || key === 'detour_surcharge' || key === 'total_cost'">
+                    {{ fmtNum(viewer.record[key]) }}
+                  </template>
+                  <template v-else-if="key === 'source'">
+                    <NTag size="small" :type="viewer.record[key] === 'ocr' ? 'info' : 'default'">
+                      {{ viewer.record[key] === 'ocr' ? 'OCR' : '手动' }}
+                    </NTag>
+                  </template>
+                  <template v-else-if="key === 'ocr_status'">
+                    <NTag size="small" :type="viewer.record[key] === 'success' ? 'success' : viewer.record[key] === 'failed' ? 'error' : 'warning'">
+                      {{ viewer.record[key] === 'success' ? '成功' : viewer.record[key] === 'failed' ? '失败' : viewer.record[key] || '-' }}
+                    </NTag>
+                  </template>
+                  <template v-else>
+                    {{ viewer.record[key] ?? '-' }}
+                  </template>
+                </NDescriptionsItem>
+              </NDescriptions>
+            </NCard>
+          </div>
         </div>
       </template>
     </NModal>
