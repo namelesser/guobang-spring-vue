@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
     </NCard>
 
     <!-- 图片编辑器弹窗 -->
-    <NModal v-model:show="editorOpen" preset="card" title="图片查看与编辑" style="width: 95vw; height: 92vh">
+    <NModal v-if="editorOpen" v-model:show="editorOpen" preset="card" title="图片查看与编辑" style="width: 95vw; height: 92vh">
       <template #header-extra>
         <NSpace align="center">
           <NButton size="small" @click="rotate(-90)">左转</NButton>
