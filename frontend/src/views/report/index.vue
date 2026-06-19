@@ -110,8 +110,8 @@ watch(filters, () => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
-    <NCard title="经营报表" :bordered="false" size="small">
+  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto h-full">
+    <NCard title="经营报表" :bordered="false" size="small" class="flex-1-hidden">
       <template #header-extra>
         <NSpace>
           <NButton :disabled="!filters.month" @click="goRecords()">查看明细</NButton>
@@ -199,14 +199,17 @@ watch(filters, () => {
         </NGi>
       </NGrid>
 
-      <NSpin :show="loading">
-        <NDataTable
-          :columns="columns"
-          :data="(report?.groups as any[]) || []"
-          :loading="loading"
-          :row-key="(row: Record<string, unknown>) => String(row.company) + String(row.receiver)"
-          striped
-        />
+      <NSpin :show="loading" class="flex-1-hidden">
+        <div class="flex-1-hidden">
+          <NDataTable
+            :columns="columns"
+            :data="(report?.groups as any[]) || []"
+            :loading="loading"
+            :row-key="(row: Record<string, unknown>) => String(row.company) + String(row.receiver)"
+            striped
+            flex-height
+          />
+        </div>
       </NSpin>
 
       <NEmpty v-if="!report && !loading" description="请选择月份" style="padding: 70px 0" />

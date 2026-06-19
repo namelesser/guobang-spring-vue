@@ -5,7 +5,7 @@ import type { DataTableColumns } from 'naive-ui';
 import { fetchImages, fetchImage, deleteImage, updateImage, reocrImage, rereviewImage } from '@/service/api/business';
 import type { ImageAsset } from '@/service/api/types';
 import { useImageEditor } from '@/hooks/business/image-editor';
-import { monthOptions as getMonthOptions, downloadExport } from '@/utils/business';
+import { monthOptions, downloadExport } from '@/utils/business';
 import { useRouter } from 'vue-router';
 
 defineOptions({ name: 'Images' });
@@ -28,21 +28,7 @@ const filters = reactive({
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 
-// 表格高度自适应窗口
-const tableMaxHeight = ref(500);
-function updateTableHeight() {
-  tableMaxHeight.value = Math.max(300, window.innerHeight - 260);
-}
-onMounted(() => {
-  updateTableHeight();
-  window.addEventListener('resize', updateTableHeight);
-});
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', updateTableHeight);
-});
-
-const monthOptions = getMonthOptions();
-
+const monthOpts = monthOptions();
 const statusOptions = [
   { label: '待扫描', value: 'pending' },
   { label: '识别中', value: 'processing' },
@@ -274,8 +260,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
-    <NCard title="图片资产" :bordered="false" size="small">
+  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto h-full">
+    <NCard title="图片资产" :bordered="false" size="small" class="flex-1-hidden">
       <template #header-extra>
         <NSpace>
           <NButton @click="exportImages('zip')">导出图片</NButton>
@@ -293,7 +279,7 @@ onBeforeUnmount(() => {
                 v-model:value="filters.month"
                 clearable
                 placeholder="选择月份"
-                :options="monthOptions"
+                :options="monthOpts"
                 style="width: 140px"
               />
             </NFormItem>
@@ -317,15 +303,18 @@ onBeforeUnmount(() => {
         </NForm>
       </NSpace>
 
-      <NDataTable
-        :columns="columns"
-        :data="rows"
-        :loading="loading"
-        :row-key="(row: any) => row.id"
-        :max-height="tableMaxHeight"
-        remote
-        striped
-      />
+      <!-- 表格容器 -->
+      <div class="flex-1-hidden">
+        <NDataTable
+          :columns="columns"
+          :data="rows"
+          :loading="loading"
+          :row-key="(row: any) => row.id"
+          remote
+          striped
+          flex-height
+        />
+      </div>
 
       <NSpace justify="center" class="mt-16px">
         <NPagination v-model:page="page" :page-count="totalPages" :page-size="PAGE_SIZE" @update:page="goPage" />
