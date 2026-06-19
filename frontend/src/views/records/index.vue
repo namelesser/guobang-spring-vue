@@ -103,35 +103,35 @@ const detailGroups = [
 ];
 
 const columns: DataTableColumns<any> = [
-  { title: 'ID', key: 'id', width: 70, fixed: 'left' },
-  { title: '日期', key: 'record_date', width: 110, render: row => (row.record_date || '').slice(0, 10) },
-  { title: '单号', key: 'order_no', minWidth: 130 },
-  { title: '开单公司', key: 'company', minWidth: 180 },
-  { title: '收货单位', key: 'receiver', minWidth: 160 },
-  { title: '车牌', key: 'plate_no', width: 110 },
-  { title: '净重', key: 'net_weight', width: 90, align: 'right', render: row => fmtNum(row.net_weight) },
-  { title: '单价', key: 'freight_rate', width: 90, align: 'right', render: row => fmtNum(row.freight_rate) },
-  { title: '总费用', key: 'total_cost', width: 110, align: 'right', render: row => fmtNum(row.total_cost) },
+  { title: 'ID', key: 'id', width: 65, fixed: 'left', ellipsis: { tooltip: true } },
+  { title: '日期', key: 'record_date', width: 105, render: row => (row.record_date || '').slice(0, 10) },
+  { title: '单号', key: 'order_no', minWidth: 120, ellipsis: { tooltip: true } },
+  { title: '开单公司', key: 'company', minWidth: 160, ellipsis: { tooltip: true } },
+  { title: '收货单位', key: 'receiver', minWidth: 140, ellipsis: { tooltip: true } },
+  { title: '车牌', key: 'plate_no', width: 100 },
+  { title: '净重', key: 'net_weight', width: 85, align: 'right', render: row => fmtNum(row.net_weight) },
+  { title: '单价', key: 'freight_rate', width: 85, align: 'right', render: row => fmtNum(row.freight_rate) },
+  { title: '总费用', key: 'total_cost', width: 100, align: 'right', render: row => fmtNum(row.total_cost) },
   {
     title: '来源',
     key: 'source',
-    width: 95,
+    width: 80,
     render: row =>
-      h(NTag, { size: 'small', type: row.source === 'ocr' ? 'info' : 'default' }, () =>
+      h(NTag, { size: 'small', type: row.source === 'ocr' ? 'info' : 'default', round: true }, () =>
         row.source === 'ocr' ? 'OCR' : '手动'
       )
   },
   {
     title: '状态',
     key: 'reviewed',
-    width: 95,
+    width: 85,
     render: row =>
-      h(NTag, { size: 'small', type: row.reviewed ? 'success' : 'warning' }, () => (row.reviewed ? '已核对' : '未核对'))
+      h(NTag, { size: 'small', type: row.reviewed ? 'success' : 'warning', round: true }, () => (row.reviewed ? '已核对' : '未核对'))
   },
   {
     title: '操作',
     key: 'actions',
-    width: 250,
+    width: 220,
     fixed: 'right',
     render: row =>
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
@@ -464,9 +464,11 @@ onBeforeUnmount(() => {
         :data="rows"
         :loading="loading"
         :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
-        :max-height="600"
+        :max-height="650"
+        :row-class-name="() => 'record-row'"
         remote
         striped
+        size="medium"
       />
 
       <NSpace justify="center" class="mt-16px">
@@ -582,3 +584,9 @@ onBeforeUnmount(() => {
     </NModal>
   </div>
 </template>
+
+<style scoped>
+:deep(.record-row td) {
+  padding: 12px 10px !important;
+}
+</style>
