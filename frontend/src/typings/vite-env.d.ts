@@ -85,7 +85,7 @@ declare namespace Env {
      * It only has effect when the auth route mode is static, if the route mode is dynamic, the home route key is
      * defined in the back-end
      */
-    readonly VITE_ROUTE_HOME: import('@elegant-router/types').LastLevelRouteKey;
+    readonly VITE_ROUTE_HOME: import('@/router/route-map').LastLevelRouteKey;
     /**
      * Default menu icon if menu icon is not set
      *
@@ -108,8 +108,6 @@ declare namespace Env {
     readonly VITE_AUTOMATICALLY_DETECT_UPDATE?: CommonType.YesOrNo;
     /** show proxy url log in terminal */
     readonly VITE_PROXY_LOG?: CommonType.YesOrNo;
-    /** The launch editor */
-    readonly VITE_DEVTOOLS_LAUNCH_EDITOR?: import('vite-plugin-vue-devtools').VitePluginVueDevToolsOptions['launchEditor'];
   }
 }
 

@@ -1,162 +1,132 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
-import { AdminLayout, LAYOUT_SCROLL_EL_ID } from '@sa/materials';
-import type { LayoutMode } from '@sa/materials';
-import { useAppStore } from '@/store/modules/app';
-import { useThemeStore } from '@/store/modules/theme';
-import GlobalHeader from '../modules/global-header/index.vue';
-import GlobalSider from '../modules/global-sider/index.vue';
-import GlobalTab from '../modules/global-tab/index.vue';
-import GlobalContent from '../modules/global-content/index.vue';
-import GlobalFooter from '../modules/global-footer/index.vue';
-import ThemeDrawer from '../modules/theme-drawer/index.vue';
-import { provideMixMenuContext } from '../modules/global-menu/context';
+import { computed, h } from 'vue';
+import type { MenuOption } from 'naive-ui';
+import { NButton, NDropdown } from 'naive-ui';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { fetchLogout } from '@/service/api';
+import { useAuthStore } from '@/store/modules/auth';
+import { useRouteStore } from '@/store/modules/route';
 
 defineOptions({
   name: 'BaseLayout'
 });
 
-const appStore = useAppStore();
-const themeStore = useThemeStore();
-const { secondLevelMenus, childLevelMenus, isActiveFirstLevelMenuHasChildren } = provideMixMenuContext();
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+const routeStore = useRouteStore();
 
-const GlobalMenu = defineAsyncComponent(() => import('../modules/global-menu/index.vue'));
+const menuOptions = computed<MenuOption[]>(() => mapMenus(routeStore.menus));
+const activeKey = computed(() => String(route.name || ''));
+const breadcrumbItems = computed(() => routeStore.breadcrumbs);
+const pageTitle = computed(() => String(route.meta.title || ''));
+const userOptions: MenuOption[] = [{ label: '退出登录', key: 'logout' }];
 
-const layoutMode = computed(() => {
-  const vertical: LayoutMode = 'vertical';
-  const horizontal: LayoutMode = 'horizontal';
-  return themeStore.layout.mode.includes(vertical) ? vertical : horizontal;
-});
+function mapMenus(menus: App.Global.Menu[]): MenuOption[] {
+  return menus.map(menu => ({
+    key: menu.key,
+    label: () =>
+      h(
+        RouterLink,
+        {
+          to: menu.routePath,
+          class: 'menu-link'
+        },
+        { default: () => menu.label }
+      ),
+    icon: menu.icon,
+    children: menu.children ? mapMenus(menu.children) : undefined
+  }));
+}
 
-const headerProps = computed(() => {
-  const { mode } = themeStore.layout;
+function handleMenuSelect(key: string) {
+  const target = findMenu(routeStore.menus, key);
+  if (target) {
+    router.push(target.routePath);
+  }
+}
 
-  const headerPropsConfig: Record<UnionKey.ThemeLayoutMode, App.Global.HeaderProps> = {
-    vertical: {
-      showLogo: false,
-      showMenu: false,
-      showMenuToggler: true
-    },
-    'vertical-mix': {
-      showLogo: false,
-      showMenu: false,
-      showMenuToggler: false
-    },
-    'vertical-hybrid-header-first': {
-      showLogo: !isActiveFirstLevelMenuHasChildren.value,
-      showMenu: true,
-      showMenuToggler: false
-    },
-    horizontal: {
-      showLogo: true,
-      showMenu: true,
-      showMenuToggler: false
-    },
-    'top-hybrid-sidebar-first': {
-      showLogo: true,
-      showMenu: true,
-      showMenuToggler: false
-    },
-    'top-hybrid-header-first': {
-      showLogo: true,
-      showMenu: true,
-      showMenuToggler: isActiveFirstLevelMenuHasChildren.value
+function findMenu(menus: App.Global.Menu[], key: string): App.Global.Menu | null {
+  for (const menu of menus) {
+    if (menu.key === key) return menu;
+    if (menu.children?.length) {
+      const child = findMenu(menu.children, key);
+      if (child) return child;
     }
-  };
-
-  return headerPropsConfig[mode];
-});
-
-const siderVisible = computed(() => themeStore.layout.mode !== 'horizontal');
-
-const isVerticalMix = computed(() => themeStore.layout.mode === 'vertical-mix');
-
-const isVerticalHybridHeaderFirst = computed(() => themeStore.layout.mode === 'vertical-hybrid-header-first');
-
-const isTopHybridSidebarFirst = computed(() => themeStore.layout.mode === 'top-hybrid-sidebar-first');
-
-const isTopHybridHeaderFirst = computed(() => themeStore.layout.mode === 'top-hybrid-header-first');
-
-const siderWidth = computed(() => getSiderAndCollapsedWidth(false));
-
-const siderCollapsedWidth = computed(() => getSiderAndCollapsedWidth(true));
-
-function getSiderAndCollapsedWidth(isCollapsed: boolean) {
-  const {
-    mixChildMenuWidth,
-    collapsedWidth,
-    width: themeWidth,
-    mixCollapsedWidth,
-    mixWidth: themeMixWidth
-  } = themeStore.sider;
-
-  const width = isCollapsed ? collapsedWidth : themeWidth;
-  const mixWidth = isCollapsed ? mixCollapsedWidth : themeMixWidth;
-
-  if (isTopHybridHeaderFirst.value) {
-    return isActiveFirstLevelMenuHasChildren.value ? width : 0;
   }
+  return null;
+}
 
-  if (isVerticalHybridHeaderFirst.value && !isActiveFirstLevelMenuHasChildren.value) {
-    return 0;
+async function handleUserAction(key: string) {
+  if (key !== 'logout') return;
+  try {
+    await fetchLogout();
+  } finally {
+    await authStore.resetStore();
   }
-
-  const isMixMode = isVerticalMix.value || isTopHybridSidebarFirst.value || isVerticalHybridHeaderFirst.value;
-  let finalWidth = isMixMode ? mixWidth : width;
-
-  if (isVerticalMix.value && appStore.mixSiderFixed && secondLevelMenus.value.length) {
-    finalWidth += mixChildMenuWidth;
-  }
-
-  if (isVerticalHybridHeaderFirst.value && appStore.mixSiderFixed && childLevelMenus.value.length) {
-    finalWidth += mixChildMenuWidth;
-  }
-
-  return finalWidth;
 }
 </script>
 
 <template>
-  <AdminLayout
-    v-model:sider-collapse="appStore.siderCollapse"
-    :mode="layoutMode"
-    :scroll-el-id="LAYOUT_SCROLL_EL_ID"
-    :scroll-mode="themeStore.layout.scrollMode"
-    :is-mobile="appStore.isMobile"
-    :full-content="appStore.fullContent"
-    :fixed-top="themeStore.fixedHeaderAndTab"
-    :header-height="themeStore.header.height"
-    :tab-visible="themeStore.tab.visible"
-    :tab-height="themeStore.tab.visible ? themeStore.tab.height : 0"
-    :content-class="appStore.contentXScrollable ? 'overflow-x-hidden' : ''"
-    :sider-visible="siderVisible"
-    :sider-width="siderWidth"
-    :sider-collapsed-width="siderCollapsedWidth"
-    :footer-visible="themeStore.footer.visible"
-    :footer-height="themeStore.footer.height"
-    :fixed-footer="themeStore.footer.fixed"
-    :right-footer="themeStore.footer.right"
-  >
-    <template #header>
-      <GlobalHeader v-bind="headerProps" />
-    </template>
-    <template #tab>
-      <GlobalTab />
-    </template>
-    <template #sider>
-      <GlobalSider />
-    </template>
-    <GlobalMenu />
-    <GlobalContent />
-    <ThemeDrawer />
-    <template #footer>
-      <GlobalFooter />
-    </template>
-  </AdminLayout>
+  <NLayout has-sider class="min-h-screen bg-#f5f6f8">
+    <NLayoutSider
+      bordered
+      collapse-mode="width"
+      :collapsed-width="64"
+      :width="232"
+      content-style="display:flex;flex-direction:column;height:100%;"
+      class="border-r border-#e8e8e8 bg-white"
+    >
+      <div class="flex items-center gap-12px px-18px py-18px border-b border-#f0f0f0">
+        <SystemLogo class="size-36px shrink-0" />
+        <div class="min-w-0">
+          <div class="truncate text-15px font-600 text-#111">国邦运输</div>
+          <div class="truncate text-12px text-#888">运输管理系统</div>
+        </div>
+      </div>
+
+      <NMenu
+        :value="activeKey"
+        :options="menuOptions"
+        :collapsed-width="64"
+        :collapsed-icon-size="18"
+        class="flex-1 overflow-auto py-12px"
+        @update:value="handleMenuSelect"
+      />
+    </NLayoutSider>
+
+    <NLayout>
+      <NLayoutHeader bordered class="h-64px bg-white px-24px">
+        <div class="flex h-full items-center justify-between gap-16px">
+          <div class="min-w-0">
+            <div class="truncate text-18px font-600 text-#111">{{ pageTitle }}</div>
+            <NBreadcrumb v-if="breadcrumbItems.length > 1" class="mt-2px text-12px">
+              <NBreadcrumbItem v-for="item in breadcrumbItems" :key="item.key">
+                {{ item.label }}
+              </NBreadcrumbItem>
+            </NBreadcrumb>
+          </div>
+
+          <NDropdown :options="userOptions" @select="handleUserAction">
+            <NButton quaternary>
+              {{ authStore.userInfo.userName || '管理员' }}
+            </NButton>
+          </NDropdown>
+        </div>
+      </NLayoutHeader>
+
+      <NLayoutContent content-style="padding: 20px;">
+        <RouterView />
+      </NLayoutContent>
+    </NLayout>
+  </NLayout>
 </template>
 
-<style lang="scss">
-#__SCROLL_EL_ID__ {
-  @include scrollbar();
+<style scoped>
+:deep(.menu-link) {
+  display: block;
+  width: 100%;
+  color: inherit;
+  text-decoration: none;
 }
 </style>

@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -36,6 +37,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> uploadTooLarge() {
         // 返回文件大小超限错误
         return Api.error("图片超过上传大小限制", HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> notFound(NoResourceFoundException ex) {
+        // 静态资源/前端路由已移除时，明确返回 404，避免前端入口假象
+        return Api.error("资源不存在", HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(Exception.class)

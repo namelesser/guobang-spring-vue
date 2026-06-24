@@ -3,41 +3,44 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import { useRouter } from 'vue-router';
 import { useMessage, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchReport, fetchCollections } from '@/service/api/business';
+import { fetchReport } from '@/service/api/business';
+import type { ReportGroup, ReportResponse } from '@/service/api/types';
+import { useCollections } from '@/hooks/business/use-collections';
+import { currentMonth, fmtNum } from '@/utils/business';
 
 defineOptions({ name: 'Report' });
 
 const router = useRouter();
 const message = useMessage();
 const loading = ref(false);
-const report = ref<any>(null);
+const report = ref<ReportResponse | null>(null);
 let reportTimer: number | null = null;
 let requestSeq = 0;
-const collectionCache: Record<string, string[]> = reactive({});
-const filters = reactive({ month: getCurrentMonth(), company: '', sender: '', receiver: '', plate: '' });
+const { loadCollections, optionsFor } = useCollections();
+const filters = reactive({ month: currentMonth(), company: '', sender: '', receiver: '', plate: '' });
 
-const gt = computed(() => report.value?.grand_total || {});
+const gt = computed(() => report.value?.grand_total ?? { trips: 0, total_weight: 0, total_freight: 0 });
 const avgRate = computed(() => {
   const weight = Number(gt.value.total_weight || 0);
   const freight = Number(gt.value.total_freight || 0);
   return weight ? (freight / weight).toFixed(2) : '0.00';
 });
 
-const opts = (cat: string) => computed(() => (collectionCache[cat] || []).map(value => ({ label: value, value })));
+const opts = (cat: string) => computed(() => optionsFor(cat));
 const companyOptions = opts('company');
 const senderOptions = opts('sender');
 const receiverOptions = opts('receiver');
 const plateOptions = opts('plate_no');
 
-const columns: DataTableColumns<any> = [
+const columns: DataTableColumns<ReportGroup> = [
   { title: '线路', key: 'route', minWidth: 260, render: row => `${row.company || ''} -> ${row.receiver || ''}` },
   { title: '发货单位', key: 'sender', minWidth: 160 },
   { title: '收货单位', key: 'receiver', minWidth: 160 },
   { title: '车牌号', key: 'plate_no', width: 120 },
   { title: '车次', key: 'trips', width: 80, align: 'center' },
-  { title: '总净重', key: 'total_weight', width: 120, align: 'right', render: row => formatNum(row.total_weight) },
-  { title: '总运费', key: 'total_freight', width: 120, align: 'right', render: row => formatNum(row.total_freight) },
-  { title: '均价', key: 'avg_rate', width: 100, align: 'right', render: row => formatNum(row.avg_rate) },
+  { title: '总净重', key: 'total_weight', width: 120, align: 'right', render: row => fmtNum(row.total_weight) },
+  { title: '总运费', key: 'total_freight', width: 120, align: 'right', render: row => fmtNum(row.total_freight) },
+  { title: '均价', key: 'avg_rate', width: 100, align: 'right', render: row => fmtNum(row.avg_rate) },
   {
     title: '操作',
     key: 'actions',
@@ -46,29 +49,6 @@ const columns: DataTableColumns<any> = [
     render: row => h(NButton, { size: 'small', type: 'primary', onClick: () => goRecords(row) }, () => '明细')
   }
 ];
-
-function formatNum(value: any) {
-  return Number(value || 0).toFixed(2);
-}
-
-function getCurrentMonth() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
-async function loadCollections() {
-  try {
-    const data = await fetchCollections();
-    for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
-      collectionCache[cat] = items
-        .map(item => String(item.value || '').trim())
-        .filter(v => v && v !== '未知')
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    }
-  } catch (e) {
-    console.error('加载基础资料失败:', e);
-  }
-}
 
 async function loadReport() {
   if (!filters.month) {
@@ -80,8 +60,9 @@ async function loadReport() {
   try {
     const data = await fetchReport(buildReportParams());
     if (seq === requestSeq) report.value = data;
-  } catch (error: any) {
-    if (seq === requestSeq) message.error(error?.message || '查询失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (seq === requestSeq) message.error(err?.message || '查询失败');
   } finally {
     if (seq === requestSeq) loading.value = false;
   }
@@ -100,13 +81,13 @@ function resetFilters() {
   Object.assign(filters, { company: '', sender: '', receiver: '', plate: '' });
 }
 
-function goRecords(group: any = null) {
+function goRecords(group: ReportGroup | null = null) {
   const query: Record<string, string> = {};
   if (filters.month) query.month = filters.month;
-  const company = group?.company || filters.company;
-  const sender = group?.sender || filters.sender;
-  const receiver = group?.receiver || filters.receiver;
-  const plate = group?.plate_no || filters.plate;
+  const company = String(group?.company || filters.company || '');
+  const sender = String(group?.sender || filters.sender || '');
+  const receiver = String(group?.receiver || filters.receiver || '');
+  const plate = String(group?.plate_no || filters.plate || '');
   if (company) query.company = company;
   if (sender) query.sender = sender;
   if (receiver) query.receiver = receiver;
@@ -130,10 +111,10 @@ watch(filters, () => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="经营报表" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
+        <NSpace wrap>
           <NButton :disabled="!filters.month" @click="goRecords()">查看明细</NButton>
         </NSpace>
       </template>
@@ -196,23 +177,23 @@ watch(filters, () => {
       </NSpace>
 
       <!-- 统计卡片 -->
-      <NGrid v-if="report" :cols="4" :x-gap="12" :y-gap="12" class="mb-16px">
-        <NGi>
+      <NGrid v-if="report" :cols="4" :x-gap="12" :y-gap="12" responsive="screen" item-responsive class="mb-16px">
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="总车次">{{ gt.trips || 0 }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
-            <NStatistic label="总净重(吨)">{{ formatNum(gt.total_weight) }}</NStatistic>
+            <NStatistic label="总净重(吨)">{{ fmtNum(gt.total_weight) }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
-            <NStatistic label="总运费(元)">{{ formatNum(gt.total_freight) }}</NStatistic>
+            <NStatistic label="总运费(元)">{{ fmtNum(gt.total_freight) }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="均价(元/吨)">{{ avgRate }}</NStatistic>
           </NCard>
@@ -224,7 +205,10 @@ watch(filters, () => {
           :columns="columns"
           :data="report?.groups || []"
           :loading="loading"
-          :row-key="(row: any) => row.company + row.receiver"
+          :row-key="
+            (row: ReportGroup) => `${row.company || ''}-${row.receiver || ''}-${row.sender || ''}-${row.plate_no || ''}`
+          "
+          :scroll-x="1200"
           striped
         />
       </NSpin>

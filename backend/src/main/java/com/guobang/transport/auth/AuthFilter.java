@@ -61,6 +61,7 @@ public class AuthFilter extends OncePerRequestFilter {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("ok", false); // 标记请求失败
         body.put("error", message); // 写入错误信息
+        body.put("status", status);
         mapper.writeValue(response.getWriter(), body); // 序列化为 JSON 并写入响应
     }
 }

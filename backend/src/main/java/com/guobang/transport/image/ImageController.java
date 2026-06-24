@@ -107,6 +107,12 @@ public class ImageController {
         return ResponseEntity.ok(Api.ok("thumbnail_base64", dataUrl));
     }
 
+    @GetMapping("/api/images/{imageId}/thumbnail/raw")
+    public ResponseEntity<byte[]> thumbnailRaw(@PathVariable int imageId) {
+        String dataUrl = imageService.thumbnailDataUrl(imageId);
+        return rawImageResponse(dataUrl, "图片不存在或缩略图生成失败");
+    }
+
     /**
      * 导出图片列表或图片压缩包
      *
@@ -130,14 +136,14 @@ public class ImageController {
             zip.write(ExportSupport.csv(rows, ImageService.IMAGE_COLUMNS));
             zip.closeEntry();
             for (Map<String, Object> row : rows) {
-                int imageId = ((Number) row.get("id")).intValue();
-                ImageService.ImageData data = imageService.data(imageId); // 逐个读取图片数据
-                if (data == null || data.bytes() == null) {
+                Object raw = row.get("data");
+                if (!(raw instanceof byte[] bytes) || bytes.length == 0) {
                     continue;
                 }
+                int imageId = ((Number) row.get("id")).intValue();
                 String fileName = safeName(imageId + "_" + String.valueOf(row.getOrDefault("file_name", "image_" + imageId + ".jpg"))); // 构建安全文件名
                 zip.putNextEntry(new ZipEntry("images/" + fileName));
-                zip.write(data.bytes()); // 写入图片到ZIP
+                zip.write(bytes); // 写入图片到ZIP
                 zip.closeEntry();
             }
         }
@@ -157,6 +163,15 @@ public class ImageController {
             return Api.error("图片不存在", HttpStatus.NOT_FOUND);
         }
         return ResponseEntity.ok(Api.ok("image_base64", dataUrl));
+    }
+
+    @GetMapping("/api/images/{imageId}/raw")
+    public ResponseEntity<byte[]> getRaw(@PathVariable int imageId) {
+        ImageService.ImageData data = imageService.data(imageId);
+        if (data == null || data.bytes() == null || data.bytes().length == 0) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(data.mimeType())).body(data.bytes());
     }
 
     /**
@@ -250,6 +265,19 @@ public class ImageController {
         headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded); // 设置下载头，支持中文文件名
         headers.setContentType(MediaType.parseMediaType(mediaType)); // 设置内容类型
         return ResponseEntity.ok().headers(headers).body(content);
+    }
+
+    private static ResponseEntity<byte[]> rawImageResponse(String dataUrl, String notFoundMessage) {
+        if (dataUrl == null || !dataUrl.startsWith("data:") || !dataUrl.contains(",")) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(("{\"ok\":false,\"error\":\"" + notFoundMessage + "\",\"status\":404}")
+                            .getBytes(StandardCharsets.UTF_8));
+        }
+        String[] parts = dataUrl.split(",", 2);
+        String mime = parts[0].replace("data:", "").replaceAll(";.*$", "").toLowerCase();
+        byte[] bytes = Base64.getDecoder().decode(parts[1]);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(mime)).body(bytes);
     }
 
     /**

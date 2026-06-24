@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { useMessage } from 'naive-ui';
+import { useMessage, NTag } from 'naive-ui';
 import {
   fetchUnreviewedRecords,
   fetchRecord,
@@ -10,20 +10,35 @@ import {
   reviewRecord,
   deleteRecord,
   deleteImage,
-  fetchCollections,
   fetchRates,
   lookupRate,
   updateImage,
   reocrImage
 } from '@/service/api/business';
 import { useImageEditor } from '@/hooks/business/image-editor';
+import { useCollections } from '@/hooks/business/use-collections';
+import type { FreightRate, RecordUpdateData, TransportRecord } from '@/service/api/types';
 
 type Field = {
-  key: string;
+  key: keyof ReviewFormState;
   label: string;
   type: 'text' | 'select' | 'date' | 'number';
   collection?: string;
   readonly?: boolean;
+};
+
+type ReviewFormState = {
+  record_date: string | null;
+  order_no: string;
+  sender: string;
+  receiver: string;
+  company: string;
+  plate_no: string;
+  net_weight: number | null;
+  freight_rate: number | null;
+  detour_surcharge: number | null;
+  total_cost: number | null;
+  note: string;
 };
 
 defineOptions({ name: 'Review' });
@@ -33,10 +48,12 @@ const message = useMessage();
 
 const loading = ref(false);
 const saving = ref(false);
-const records = ref<any[]>([]);
+const records = ref<TransportRecord[]>([]);
 const currentIndex = ref(0);
 const imageId = ref('');
 const imageBase64 = ref('');
+const imageSrc = ref('');
+const compactLayout = ref(false);
 
 const fields: Field[] = [
   { key: 'record_date', label: '日期', type: 'date' },
@@ -52,14 +69,23 @@ const fields: Field[] = [
   { key: 'note', label: '备注', type: 'text' }
 ];
 
-const form = reactive<Record<string, any>>({});
-fields.forEach(field => {
-  form[field.key] = field.type === 'number' ? null : field.type === 'date' ? null : '';
+const form = reactive<ReviewFormState>({
+  record_date: null,
+  order_no: '',
+  sender: '',
+  receiver: '',
+  company: '',
+  plate_no: '',
+  net_weight: null,
+  freight_rate: null,
+  detour_surcharge: null,
+  total_cost: null,
+  note: ''
 });
-const collectionCache: Record<string, string[]> = reactive({});
+const { collectionCache, loadCollections: loadCollectionsBase } = useCollections();
 const routeReceivers = ref<string[]>([]);
 const routeSenders = ref<string[]>([]);
-const allRates = ref<any[]>([]);
+const allRates = ref<FreightRate[]>([]);
 
 const receiverOptions = computed(() => routeReceivers.value.map(v => ({ label: v, value: v })));
 const senderOptions = computed(() => routeSenders.value.map(v => ({ label: v, value: v })));
@@ -79,12 +105,17 @@ const {
   onSave: async base64 => {
     await updateImage(Number(imageId.value), { image_base64: base64 });
     imageBase64.value = base64;
+    imageSrc.value = base64;
     message.success('图片已保存');
   },
   getInitialBase64: () => imageBase64.value
 });
 
-const currentRecord = computed(() => records.value[currentIndex.value] || null);
+const currentRecord = computed<TransportRecord | null>(() => records.value[currentIndex.value] || null);
+
+function updateLayout() {
+  compactLayout.value = window.innerWidth < 1100;
+}
 
 function getOptions(field: Field) {
   if (field.collection === '__route_receiver__') return receiverOptions.value;
@@ -94,19 +125,13 @@ function getOptions(field: Field) {
 
 async function loadCollections() {
   try {
-    const data = await fetchCollections();
-    for (const [cat, items] of Object.entries(data.collections || {}) as [string, any[]][]) {
-      collectionCache[cat] = items
-        .map(item => String(item.value || '').trim())
-        .filter(v => v && v !== '未知')
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    }
+    await loadCollectionsBase();
     const rateData = await fetchRates();
-    allRates.value = rateData.rates || rateData || [];
+    allRates.value = rateData.items || rateData.rates || [];
     updateRouteReceivers();
     updateRouteSenders();
-  } catch (e) {
-    console.error('加载基础资料失败:', e);
+  } catch (error: unknown) {
+    console.error('加载基础资料失败:', error);
   }
 }
 
@@ -114,9 +139,11 @@ function updateRouteReceivers() {
   const company = String(form.company || '').trim();
   let rates = allRates.value;
   if (company) {
-    rates = rates.filter((r: any) => String(r.origin || '').trim() === company);
+    rates = rates.filter((r: FreightRate) => String(r.origin || '').trim() === company);
   }
-  const dests = [...new Set(rates.map((r: any) => String(r.destination || '').trim()).filter(Boolean))] as string[];
+  const dests = [
+    ...new Set(rates.map((r: FreightRate) => String(r.destination || '').trim()).filter(Boolean))
+  ] as string[];
   routeReceivers.value = dests.sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
@@ -124,9 +151,11 @@ function updateRouteSenders() {
   const company = String(form.company || '').trim();
   let rates = allRates.value;
   if (company) {
-    rates = rates.filter((r: any) => String(r.origin || '').trim() === company);
+    rates = rates.filter((r: FreightRate) => String(r.origin || '').trim() === company);
   }
-  const senders = [...new Set(rates.map((r: any) => String(r.sender || '').trim()).filter(Boolean))] as string[];
+  const senders = [
+    ...new Set(rates.map((r: FreightRate) => String(r.sender || '').trim()).filter(Boolean))
+  ] as string[];
   routeSenders.value = senders.sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
@@ -148,23 +177,64 @@ function onFieldChange(key: string) {
   }
 }
 
-function syncForm(row: any) {
-  fields.forEach(field => {
-    if (field.type === 'number') {
-      form[field.key] = row?.[field.key] == null ? null : Number(row[field.key]);
-    } else if (field.type === 'date') {
-      const val = row?.[field.key];
-      form[field.key] = val ? String(val) : null;
-    } else {
-      form[field.key] = String(row?.[field.key] ?? '');
-    }
-  });
+function getFormValue<K extends keyof ReviewFormState>(key: K): ReviewFormState[K] {
+  return form[key];
+}
+
+function getSelectValue(key: keyof ReviewFormState): string | number | null {
+  return (getFormValue(key) as string | number | null) ?? null;
+}
+
+function getDateValue(key: keyof ReviewFormState): string | null {
+  return (getFormValue(key) as string | null) ?? null;
+}
+
+function getNumberValue(key: keyof ReviewFormState): number | null {
+  return (getFormValue(key) as number | null) ?? null;
+}
+
+function handleSelectValueChange(key: keyof ReviewFormState, value: string | number | null) {
+  setFormValue(key, String(value ?? '') as ReviewFormState[typeof key]);
+  onFieldChange(key);
+}
+
+function handleDateValueChange(key: keyof ReviewFormState, value: string | null) {
+  setFormValue(key, value as ReviewFormState[typeof key]);
+  onFieldChange(key);
+}
+
+function handleNumberValueChange(key: keyof ReviewFormState, value: number | null) {
+  setFormValue(key, value as ReviewFormState[typeof key]);
+  onFieldChange(key);
+}
+
+function handleTextValueChange(key: keyof ReviewFormState, value: string) {
+  setFormValue(key, value as ReviewFormState[typeof key]);
+  onFieldChange(key);
+}
+
+function setFormValue<K extends keyof ReviewFormState>(key: K, value: ReviewFormState[K]) {
+  form[key] = value;
+}
+
+function syncForm(row: TransportRecord) {
+  form.record_date = row.record_date ? String(row.record_date) : null;
+  form.order_no = String(row.order_no ?? '');
+  form.sender = String(row.sender ?? '');
+  form.receiver = String(row.receiver ?? '');
+  form.company = String(row.company ?? '');
+  form.plate_no = String(row.plate_no ?? '');
+  form.net_weight = row.net_weight == null ? null : Number(row.net_weight);
+  form.freight_rate = row.freight_rate == null ? null : Number(row.freight_rate);
+  form.detour_surcharge = row.detour_surcharge == null ? null : Number(row.detour_surcharge);
+  form.total_cost = row.total_cost == null ? null : Number(row.total_cost);
+  form.note = String(row.note ?? '');
 }
 
 async function lookupRateForForm() {
   const company = String(form.company || '').trim();
   const receiver = String(form.receiver || '').trim();
-  const date = form.record_date ? new Date(form.record_date).toISOString().split('T')[0] : '';
+  const date = form.record_date ? new Date(String(form.record_date)).toISOString().split('T')[0] : '';
   if (!company || !receiver || !date) return;
   try {
     const data = await lookupRate({ origin: company, destination: receiver, date });
@@ -178,20 +248,18 @@ async function lookupRateForForm() {
     const detour = Number(form.detour_surcharge || 0);
     form.freight_rate = rate;
     form.total_cost = Number((net * (rate + detour)).toFixed(2));
-  } catch (e) {
-    console.error('查询运价失败:', e);
+  } catch (error: unknown) {
+    console.error('查询运价失败:', error);
   }
 }
 
 async function loadImage(id: string) {
+  imageSrc.value = '';
   imageBase64.value = '';
   if (!id) return;
-  try {
-    const data = await fetchImage(Number(id));
-    imageBase64.value = data.image_base64 || '';
-  } catch (e) {
-    console.error('加载图片失败:', e);
-  }
+  const data = await fetchImage(Number(id));
+  imageBase64.value = data.image_base64 || '';
+  imageSrc.value = imageBase64.value;
 }
 
 async function refreshList() {
@@ -199,14 +267,22 @@ async function refreshList() {
   records.value = data.records || [];
 }
 
-async function loadRecord(row: any) {
+function ensureRecordVisible(row: TransportRecord) {
+  const index = records.value.findIndex(item => item.id === row.id);
+  if (index >= 0) {
+    return index;
+  }
+  records.value = [row, ...records.value];
+  return 0;
+}
+
+async function loadRecord(row: TransportRecord) {
   imageId.value =
-    row.first_image_id ||
+    String(row.first_image_id || '') ||
     String(row.image_id || '')
       .split(',')[0]
       .trim();
-  currentIndex.value = records.value.findIndex(item => item.id === row.id);
-  if (currentIndex.value < 0) currentIndex.value = 0;
+  currentIndex.value = ensureRecordVisible(row);
   syncForm(row);
   updateRouteReceivers();
   updateRouteSenders();
@@ -222,18 +298,20 @@ async function loadCurrent() {
     if (queryId) {
       const data = await fetchRecord(queryId);
       await refreshList();
-      await loadRecord(data.record || data);
+      await loadRecord(data.record);
     } else {
       await refreshList();
       if (records.value.length === 0) {
         imageId.value = '';
         imageBase64.value = '';
+        imageSrc.value = '';
         return;
       }
       await loadRecord(records.value[0]);
     }
-  } catch (error: any) {
-    message.error(error?.message || '加载失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '加载失败');
   } finally {
     loading.value = false;
   }
@@ -267,17 +345,41 @@ function validateForm(): boolean {
   return true;
 }
 
-function buildBody() {
-  const body: Record<string, any> = {};
+function buildBody(): RecordUpdateData {
+  const body: RecordUpdateData = {};
   fields.forEach(field => {
     if (field.readonly) return;
-    const value = form[field.key];
-    body[field.key] =
-      field.type === 'number'
-        ? value == null || value === ''
-          ? null
-          : Number(value)
-        : String(value ?? '').trim() || null;
+    switch (field.key) {
+      case 'record_date':
+        body.record_date = form.record_date;
+        break;
+      case 'order_no':
+        body.order_no = form.order_no.trim() || undefined;
+        break;
+      case 'sender':
+        body.sender = form.sender.trim() || undefined;
+        break;
+      case 'receiver':
+        body.receiver = form.receiver.trim() || undefined;
+        break;
+      case 'company':
+        body.company = form.company.trim() || undefined;
+        break;
+      case 'plate_no':
+        body.plate_no = form.plate_no.trim() || undefined;
+        break;
+      case 'net_weight':
+        body.net_weight = form.net_weight ?? undefined;
+        break;
+      case 'detour_surcharge':
+        body.detour_surcharge = form.detour_surcharge ?? undefined;
+        break;
+      case 'note':
+        body.note = form.note.trim() || undefined;
+        break;
+      default:
+        break;
+    }
   });
   return body;
 }
@@ -291,8 +393,9 @@ async function save() {
     await updateRecord(record.id, buildBody());
     message.success('已保存');
     await loadCurrent();
-  } catch (error: any) {
-    message.error(error?.message || '保存失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '保存失败');
   } finally {
     saving.value = false;
   }
@@ -320,9 +423,11 @@ async function markReviewed() {
     } else {
       imageId.value = '';
       imageBase64.value = '';
+      imageSrc.value = '';
     }
-  } catch (error: any) {
-    message.error(error?.message || '核对失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '核对失败');
   } finally {
     saving.value = false;
   }
@@ -346,9 +451,11 @@ async function deleteCurrent() {
     } else {
       imageId.value = '';
       imageBase64.value = '';
+      imageSrc.value = '';
     }
-  } catch (error: any) {
-    message.error(error?.message || '删除失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '删除失败');
   }
 }
 
@@ -357,8 +464,9 @@ async function reocr() {
   try {
     await reocrImage(Number(imageId.value));
     message.success('已加入 OCR 队列');
-  } catch (error: any) {
-    message.error(error?.message || '重新 OCR 失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '重新 OCR 失败');
   }
 }
 
@@ -370,8 +478,14 @@ async function openEditor() {
 }
 
 onMounted(async () => {
+  updateLayout();
+  window.addEventListener('resize', updateLayout);
   await loadCollections();
   await loadCurrent();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateLayout);
 });
 
 watch(
@@ -383,22 +497,27 @@ watch(
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="人工核对" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
+        <NSpace wrap>
           <NButton :disabled="currentIndex <= 0" @click="move(-1)">上一条</NButton>
           <NButton :disabled="currentIndex >= records.length - 1" @click="move(1)">下一条</NButton>
           <NButton :loading="loading" @click="loadCurrent">刷新</NButton>
         </NSpace>
       </template>
 
-      <NEmpty v-if="!loading && records.length === 0" description="当前没有待核对记录" style="padding: 80px 0" />
+      <NEmpty
+        v-if="!loading && records.length === 0"
+        key="empty"
+        description="当前没有待核对记录"
+        style="padding: 80px 0"
+      />
 
-      <NSpin v-else :show="loading">
-        <div style="display: grid; grid-template-columns: minmax(460px, 1.05fr) minmax(440px, 0.95fr); gap: 16px">
+      <NSpin v-else key="content" :show="loading">
+        <div class="review-layout">
           <!-- 图片区 -->
-          <NCard>
+          <NCard class="review-card">
             <template #header>
               <NSpace align="center">
                 <NTag type="info" round>{{ currentIndex + 1 }} / {{ records.length }}</NTag>
@@ -406,55 +525,55 @@ watch(
               </NSpace>
             </template>
             <template #header-extra>
-              <NSpace>
+              <NSpace wrap>
                 <NButton size="small" @click="openEditor">裁剪/旋转</NButton>
                 <NButton size="small" type="primary" @click="reocr">重新 OCR</NButton>
               </NSpace>
             </template>
-            <div style="text-align: center; min-height: 300px">
-              <img v-if="imageBase64" :src="imageBase64" style="max-width: 100%; max-height: 60vh" />
-              <NEmpty v-else description="暂无图片" />
+            <div class="review-image-wrap">
+              <img v-if="imageSrc" key="image" :src="imageSrc" style="max-width: 100%; max-height: 60vh" />
+              <NEmpty v-else key="empty" description="暂无图片" />
             </div>
           </NCard>
 
           <!-- 表单区 -->
-          <NCard title="记录信息">
+          <NCard title="记录信息" class="review-card">
             <NForm label-placement="top" :show-feedback="false">
-              <NGrid :cols="2" :x-gap="12">
+              <NGrid :cols="compactLayout ? 1 : 2" :x-gap="12">
                 <NGi v-for="field in fields" :key="field.key">
                   <NFormItem :label="field.label">
                     <NSelect
                       v-if="field.type === 'select'"
-                      v-model:value="form[field.key]"
+                      :value="getSelectValue(field.key)"
                       :options="getOptions(field)"
                       clearable
                       filterable
-                      @update:value="onFieldChange(field.key)"
+                      @update:value="value => handleSelectValueChange(field.key, value)"
                     />
                     <NDatePicker
                       v-else-if="field.type === 'date'"
-                      v-model:formatted-value="form[field.key]"
+                      :formatted-value="getDateValue(field.key)"
                       type="date"
                       value-format="yyyy-MM-dd"
                       style="width: 100%"
                       :is-date-disabled="(ts: number) => ts > Date.now()"
-                      @update:formatted-value="onFieldChange(field.key)"
+                      @update:formatted-value="value => handleDateValueChange(field.key, value)"
                     />
                     <NInputNumber
                       v-else-if="field.type === 'number'"
-                      v-model:value="form[field.key]"
+                      :value="getNumberValue(field.key)"
                       :precision="2"
                       :step="0.01"
                       :readonly="field.readonly"
                       :show-button="!field.readonly"
                       style="width: 100%"
-                      @update:value="onFieldChange(field.key)"
+                      @update:value="value => handleNumberValueChange(field.key, value)"
                     />
                     <NInput
                       v-else
-                      v-model:value="form[field.key]"
+                      :value="String(getFormValue(field.key) || '')"
                       :readonly="field.readonly"
-                      @change="onFieldChange(field.key)"
+                      @update:value="value => handleTextValueChange(field.key, value)"
                     />
                   </NFormItem>
                 </NGi>
@@ -465,7 +584,7 @@ watch(
               {{ currentRecord.review_note }}
             </NAlert>
 
-            <NSpace justify="end" style="margin-top: 12px">
+            <NSpace justify="end" wrap style="margin-top: 12px">
               <NPopconfirm @positive-click="deleteCurrent">
                 <template #trigger><NButton type="error">删除图片和记录</NButton></template>
                 确认删除当前图片及关联记录？
@@ -481,7 +600,7 @@ watch(
     <!-- 图片编辑器弹窗 -->
     <NModal v-model:show="editorOpen" preset="card" title="图片编辑" style="width: 95vw; height: 92vh">
       <template #header-extra>
-        <NSpace align="center">
+        <NSpace align="center" wrap>
           <NButton size="small" @click="rotate(-90)">左转</NButton>
           <NButton size="small" @click="rotate(90)">右转</NButton>
           <NButton size="small" @click="resetEditor">重置</NButton>
@@ -504,3 +623,28 @@ watch(
     </NModal>
   </div>
 </template>
+
+<style scoped>
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(460px, 1.05fr) minmax(440px, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.review-card {
+  min-width: 0;
+}
+
+.review-image-wrap {
+  text-align: center;
+  min-height: 300px;
+  overflow: auto;
+}
+
+@media (max-width: 1100px) {
+  .review-layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

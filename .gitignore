@@ -23,3 +23,16 @@ Thumbs.db
 # Env
 .env
 .env.local
+.env.*.local
+
+# Backup
+frontend.bak/
+
+# Coverage
+coverage/
+
+# Docker
+docker-compose.override.yml
+
+# Test
+backend/target/

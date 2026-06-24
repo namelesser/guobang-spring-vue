@@ -1,6 +1,7 @@
 package com.guobang.transport.ocr;
 
 import com.guobang.transport.common.Api;
+import com.guobang.transport.common.AppSettingsStore;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 public class AdminOcrController {
+    private static final String OCR_REMAINING_QUOTA_KEY = "ocr.remaining_quota";
+
     private final OcrService ocrService;
     private final JdbcTemplate jdbc;
+    private final AppSettingsStore appSettingsStore;
 
     /**
      * 查询 OCR 任务列表
@@ -37,6 +41,16 @@ public class AdminOcrController {
         Map<String, Object> data = new LinkedHashMap<>(); // 构建返回数据容器
         data.put("tasks", ocrService.listTasks(status, limit, offset)); // 查询任务列表
         data.put("status_counts", ocrService.taskStatusCounts()); // 附带各状态的统计数量
+        return Api.ok(data);
+    }
+
+    @GetMapping("/ocr/summary")
+    public Map<String, Object> summary() {
+        Map<String, Object> stats = ocrService.stats();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("remaining_quota", appSettingsStore.get(OCR_REMAINING_QUOTA_KEY).orElse(null));
+        data.put("total_tasks", stats.get("total"));
+        data.put("by_status", stats.get("by_status"));
         return Api.ok(data);
     }
 
