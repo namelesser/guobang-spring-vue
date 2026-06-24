@@ -22,7 +22,9 @@ import type {
   ReportParams,
   ReportResponse,
   DataQualityResponse,
-  OcrScanResponse
+  OcrScanResponse,
+  OcrStatusResponse,
+  OcrSummaryResponse
 } from './types';
 
 export async function fetchRecords(params: RecordFilters, signal?: AbortSignal): Promise<RecordsResponse> {
@@ -122,11 +124,19 @@ export async function ocrScan(formData: FormData): Promise<OcrScanResponse> {
   return data;
 }
 
-export async function fetchOcrStatus(recordId: number): Promise<any> {
+export async function fetchOcrStatus(recordId: number): Promise<OcrStatusResponse> {
   const { data } = await request({
     url: '/api/ocr/status',
     method: 'get',
     params: { record_id: recordId }
+  });
+  return data;
+}
+
+export async function fetchOcrSummary(): Promise<OcrSummaryResponse> {
+  const { data } = await request({
+    url: '/api/admin/ocr/summary',
+    method: 'get'
   });
   return data;
 }

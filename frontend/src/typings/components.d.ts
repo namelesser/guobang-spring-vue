@@ -13,7 +13,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppProvider: typeof import('./../components/common/app-provider.vue')['default']
-    BetterScroll: typeof import('./../components/custom/better-scroll.vue')['default']
     ButtonIcon: typeof import('./../components/custom/button-icon.vue')['default']
     CountTo: typeof import('./../components/custom/count-to.vue')['default']
     DarkModeContainer: typeof import('./../components/common/dark-mode-container.vue')['default']
@@ -30,7 +29,6 @@ declare module 'vue' {
     IconTooltip: typeof import('./../components/common/icon-tooltip.vue')['default']
     IconUilSearch: typeof import('~icons/uil/search')['default']
     LangSwitch: typeof import('./../components/common/lang-switch.vue')['default']
-    LookForward: typeof import('./../components/custom/look-forward.vue')['default']
     MenuToggler: typeof import('./../components/common/menu-toggler.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NBadge: typeof import('naive-ui')['NBadge']
@@ -57,6 +55,10 @@ declare module 'vue' {
     NInput: typeof import('naive-ui')['NInput']
     NInputGroup: typeof import('naive-ui')['NInputGroup']
     NInputNumber: typeof import('naive-ui')['NInputNumber']
+    NLayout: typeof import('naive-ui')['NLayout']
+    NLayoutContent: typeof import('naive-ui')['NLayoutContent']
+    NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
+    NLayoutSider: typeof import('naive-ui')['NLayoutSider']
     NLoadingBarProvider: typeof import('naive-ui')['NLoadingBarProvider']
     NMenu: typeof import('naive-ui')['NMenu']
     NMessageProvider: typeof import('naive-ui')['NMessageProvider']
@@ -83,20 +85,15 @@ declare module 'vue' {
     ReloadButton: typeof import('./../components/common/reload-button.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SoybeanAvatar: typeof import('./../components/custom/soybean-avatar.vue')['default']
     SvgIcon: typeof import('./../components/custom/svg-icon.vue')['default']
     SystemLogo: typeof import('./../components/common/system-logo.vue')['default']
-    TableColumnSetting: typeof import('./../components/advanced/table-column-setting.vue')['default']
-    TableHeaderOperation: typeof import('./../components/advanced/table-header-operation.vue')['default']
     ThemeSchemaSwitch: typeof import('./../components/common/theme-schema-switch.vue')['default']
-    WaveBg: typeof import('./../components/custom/wave-bg.vue')['default']
   }
 }
 
 // For TSX support
 declare global {
   const AppProvider: typeof import('./../components/common/app-provider.vue')['default']
-  const BetterScroll: typeof import('./../components/custom/better-scroll.vue')['default']
   const ButtonIcon: typeof import('./../components/custom/button-icon.vue')['default']
   const CountTo: typeof import('./../components/custom/count-to.vue')['default']
   const DarkModeContainer: typeof import('./../components/common/dark-mode-container.vue')['default']
@@ -113,7 +110,6 @@ declare global {
   const IconTooltip: typeof import('./../components/common/icon-tooltip.vue')['default']
   const IconUilSearch: typeof import('~icons/uil/search')['default']
   const LangSwitch: typeof import('./../components/common/lang-switch.vue')['default']
-  const LookForward: typeof import('./../components/custom/look-forward.vue')['default']
   const MenuToggler: typeof import('./../components/common/menu-toggler.vue')['default']
   const NAlert: typeof import('naive-ui')['NAlert']
   const NBadge: typeof import('naive-ui')['NBadge']
@@ -140,6 +136,10 @@ declare global {
   const NInput: typeof import('naive-ui')['NInput']
   const NInputGroup: typeof import('naive-ui')['NInputGroup']
   const NInputNumber: typeof import('naive-ui')['NInputNumber']
+  const NLayout: typeof import('naive-ui')['NLayout']
+  const NLayoutContent: typeof import('naive-ui')['NLayoutContent']
+  const NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
+  const NLayoutSider: typeof import('naive-ui')['NLayoutSider']
   const NLoadingBarProvider: typeof import('naive-ui')['NLoadingBarProvider']
   const NMenu: typeof import('naive-ui')['NMenu']
   const NMessageProvider: typeof import('naive-ui')['NMessageProvider']
@@ -166,11 +166,7 @@ declare global {
   const ReloadButton: typeof import('./../components/common/reload-button.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
-  const SoybeanAvatar: typeof import('./../components/custom/soybean-avatar.vue')['default']
   const SvgIcon: typeof import('./../components/custom/svg-icon.vue')['default']
   const SystemLogo: typeof import('./../components/common/system-logo.vue')['default']
-  const TableColumnSetting: typeof import('./../components/advanced/table-column-setting.vue')['default']
-  const TableHeaderOperation: typeof import('./../components/advanced/table-header-operation.vue')['default']
   const ThemeSchemaSwitch: typeof import('./../components/common/theme-schema-switch.vue')['default']
-  const WaveBg: typeof import('./../components/custom/wave-bg.vue')['default']
 }

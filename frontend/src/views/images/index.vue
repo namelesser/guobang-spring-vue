@@ -101,7 +101,7 @@ const columns: DataTableColumns<ImageAsset> = [
             style: 'max-width:82px;max-height:62px;border-radius:6px;cursor:pointer',
             onClick: () => openEditor(row)
           })
-        : '无'
+        : h('span', { style: 'color:#94a3b8;font-size:12px' }, '无')
   },
   { title: 'ID', key: 'id', width: 70 },
   { title: '文件名', key: 'file_name', minWidth: 220 },
@@ -193,8 +193,9 @@ async function search() {
     const data = await fetchImages(buildParams(), abortController.signal);
     rows.value = data.images || [];
     total.value = data.total || 0;
-  } catch (error: any) {
-    if (error.name !== 'AbortError') message.error(error?.message || '查询失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.name !== 'AbortError') message.error(err?.message || '查询失败');
   } finally {
     loading.value = false;
   }
@@ -274,13 +275,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="图片资产" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
-          <NButton @click="exportImages('zip')">导出图片</NButton>
-          <NButton @click="exportImages('xls')">导出 XLS</NButton>
-          <NButton @click="exportImages('csv')">导出 CSV</NButton>
+        <NSpace wrap>
+          <NButton secondary @click="exportImages('zip')">导出图片</NButton>
+          <NButton secondary @click="exportImages('xls')">导出 XLS</NButton>
+          <NButton secondary @click="exportImages('csv')">导出 CSV</NButton>
         </NSpace>
       </template>
 
@@ -321,8 +322,9 @@ onBeforeUnmount(() => {
         :columns="columns"
         :data="rows"
         :loading="loading"
-        :row-key="(row: any) => row.id"
+        :row-key="(row: ImageAsset) => row.id"
         :max-height="tableMaxHeight"
+        :scroll-x="1320"
         remote
         striped
       />
@@ -333,7 +335,13 @@ onBeforeUnmount(() => {
     </NCard>
 
     <!-- 图片编辑器弹窗 -->
-    <NModal v-if="editorOpen" v-model:show="editorOpen" preset="card" title="图片查看与编辑" style="width: 95vw; height: 92vh">
+    <NModal
+      v-if="editorOpen"
+      v-model:show="editorOpen"
+      preset="card"
+      title="图片查看与编辑"
+      style="width: 95vw; height: 92vh"
+    >
       <template #header-extra>
         <NSpace align="center">
           <NButton size="small" @click="rotate(-90)">左转</NButton>

@@ -11,14 +11,7 @@ import com.guobang.transport.rate.RateService;
 import com.guobang.transport.record.RecordService;
 
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.LocalDate;
-import java.util.Base64;
-import java.util.concurrent.TimeoutException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +22,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -43,6 +38,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class OcrService {
+    private static final Logger log = LoggerFactory.getLogger(OcrService.class);
     /** 车牌号正则 */
     private static final Pattern PLATE_PATTERN = Pattern.compile("[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤川青藏琼宁][A-Z][A-Z0-9]{5,6}");
     /** 公司名称后缀正则 */
@@ -334,34 +330,6 @@ public class OcrService {
             "\u9f99", "\u9f9c", "\u9f9d", "\u9f9e", "\u9fa0"
     };
 
-    /** PaddleOCR API 地址 */
-    @Value("${ocr.paddle.api-url}")
-    private String paddleApiUrl;
-
-    /** PaddleOCR API Token */
-    @Value("${ocr.paddle.api-token}")
-    private String paddleApiToken;
-
-    /** PaddleOCR 模型名称 */
-    @Value("${ocr.paddle.model}")
-    private String paddleModel;
-
-    /** PaddleOCR 任务超时时间（秒） */
-    @Value("${ocr.paddle.timeout-sec}")
-    private int paddleTimeoutSec;
-
-    /** PaddleOCR 轮询间隔（秒） */
-    @Value("${ocr.paddle.poll-interval-sec}")
-    private int paddlePollIntervalSec;
-
-    /** 百度 OCR API Key */
-    @Value("${ocr.baidu.api-key}")
-    private String baiduApiKey;
-
-    /** 百度 OCR Secret Key */
-    @Value("${ocr.baidu.secret-key}")
-    private String baiduSecretKey;
-
     private final OcrTaskMapper ocrTaskMapper;
     private final RecordMapper recordMapper;
     private final ImageService imageService;
@@ -369,15 +337,13 @@ public class OcrService {
     private final RateService rateService;
     private final CollectionService collectionService;
     private final com.guobang.transport.mapper.FreightRateMapper freightRateMapper;
+    private final OcrRemoteClient ocrRemoteClient;
 
     /** OCR 异步工作线程池 */
     private ExecutorService ocrWorker;
 
-    /** HTTP 客户端 */
-    private HttpClient httpClient;
-
     /**
-     * 初始化 OCR 工作线程池和 HTTP 客户端
+     * 初始化 OCR 工作线程池
      */
     @PostConstruct
     private void init() {
@@ -386,9 +352,13 @@ public class OcrService {
             t.setDaemon(true); // 设为守护线程，不阻止JVM退出
             return t;
         });
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15)) // HTTP连接超时15秒
-                .build();
+    }
+
+    @PreDestroy
+    private void shutdown() {
+        if (ocrWorker != null) {
+            ocrWorker.shutdownNow();
+        }
     }
 
     public int enqueueImage(int recordId, int imageId, String fileName, String mimeType) {
@@ -415,7 +385,7 @@ public class OcrService {
                 if (task == null) return; // 任务不存在则跳过
                 processOcrSync(task); // 同步执行OCR处理
             } catch (Exception e) {
-                System.out.println("[OCR] task " + taskId + " unexpected error: " + e.getMessage());
+                log.error("OCR task {} unexpected error", taskId, e);
             }
         });
     }
@@ -431,10 +401,11 @@ public class OcrService {
                 try {
                     processOcrSync(task); // 执行OCR处理
                 } catch (Exception e) {
-                    System.out.println("[OCR] unexpected error: " + e.getMessage());
+                    log.error("OCR scheduler worker failed", e);
                 }
             });
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.error("OCR scheduler failed to claim task", ex);
         }
     }
 
@@ -443,7 +414,7 @@ public class OcrService {
         int recordId = DbSupport.intValue(task.get("record_id")); // 提取关联记录ID
         int imageId = DbSupport.intValue(task.get("image_id")); // 提取关联图片ID
         String fileName = DbSupport.str(task.get("file_name"));
-        System.out.println("[OCR] processing task " + taskId + " record " + recordId + " image " + imageId + " file " + fileName);
+        log.info("Processing OCR task {} record {} image {} file {}", taskId, recordId, imageId, fileName);
         try {
             ImageService.ImageData imageData = imageService.data(imageId); // 读取图片二进制数据
             if (imageData == null || imageData.bytes() == null || imageData.bytes().length == 0) {
@@ -454,15 +425,15 @@ public class OcrService {
             String rawText;
             String ocrSource;
             try {
-                rawText = callPaddleOcr(imageData.bytes()); // 优先使用PaddleOCR识别
+                rawText = ocrRemoteClient.callPaddleOcr(imageData.bytes()); // 优先使用PaddleOCR识别
                 ocrSource = "PaddleOCR API";
             } catch (Exception e) {
-                System.out.println("[OCR] task " + taskId + " PaddleOCR failed: " + e.getMessage() + ", falling back to Baidu"); // PaddleOCR失败时降级到百度OCR
-                rawText = callBaiduOcr(imageData.bytes());
+                log.warn("OCR task {} PaddleOCR failed, falling back to Baidu: {}", taskId, e.getMessage()); // PaddleOCR失败时降级到百度OCR
+                rawText = ocrRemoteClient.callBaiduOcr(imageData.bytes());
                 ocrSource = "百度 OCR";
             }
             rawText = stripHtmlTags(rawText); // 清理HTML标签
-            System.out.println("[OCR] task " + taskId + " got " + rawText.length() + " chars, extracting...");
+            log.info("OCR task {} extracted {} chars", taskId, rawText.length());
             Map<String, Object> fields = extractFields(rawText); // 从OCR文本中提取结构化字段
             String company = DbSupport.str(fields.get("company"));
             String parseEntry = getParserLabel(company); // 获取解析器标签用于审计
@@ -489,184 +460,6 @@ public class OcrService {
             ocrTaskMapper.markError(taskId, e.getMessage()); // 标记任务错误
             recordService.updateOcrStatus(recordId, "error", Map.of("ocr_text", e.getMessage()));
             System.out.println("[OCR] task " + taskId + " error: " + e.getMessage());
-        }
-    }
-
-    public String callPaddleOcr(byte[] imageBytes) {
-        if (imageBytes == null || imageBytes.length == 0) {
-            throw new BusinessException("image bytes empty", HttpStatus.BAD_REQUEST); // 图片数据为空直接抛异常
-        }
-        try {
-            String boundary = "----OcrBoundary" + System.currentTimeMillis(); // 生成multipart边界字符串
-            String CRLF = "\r\n";
-            StringBuilder sb = new StringBuilder();
-            sb.append("--").append(boundary).append(CRLF);
-            sb.append("Content-Disposition: form-data; name=\"model\"").append(CRLF).append(CRLF);
-            sb.append(paddleModel).append(CRLF); // 模型名称字段
-            sb.append("--").append(boundary).append(CRLF);
-            sb.append("Content-Disposition: form-data; name=\"optionalPayload\"").append(CRLF).append(CRLF);
-            sb.append("{\"useDocOrientationClassify\":false,\"useDocUnwarping\":false,\"useChartRecognition\":false}").append(CRLF); // 禁用文档方向分类和矫正
-            sb.append("--").append(boundary).append(CRLF);
-            sb.append("Content-Disposition: form-data; name=\"file\"; filename=\"image.jpg\"").append(CRLF);
-            sb.append("Content-Type: image/jpeg").append(CRLF).append(CRLF);
-            byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            byte[] footerBytes = (CRLF + "--" + boundary + "--" + CRLF).getBytes(java.nio.charset.StandardCharsets.UTF_8); // 结束标记
-            byte[] body = new byte[headerBytes.length + imageBytes.length + footerBytes.length]; // 拼接完整请求体
-            System.arraycopy(headerBytes, 0, body, 0, headerBytes.length);
-            System.arraycopy(imageBytes, 0, body, headerBytes.length, imageBytes.length);
-            System.arraycopy(footerBytes, 0, body, headerBytes.length + imageBytes.length, footerBytes.length);
-
-            HttpRequest submitReq = HttpRequest.newBuilder()
-                    .uri(URI.create(paddleApiUrl))
-                    .timeout(Duration.ofSeconds(30)) // 提交请求超时30秒
-                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .header("Authorization", "bearer " + paddleApiToken) // Bearer认证
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                    .build();
-            HttpResponse<String> submitResp = httpClient.send(submitReq, HttpResponse.BodyHandlers.ofString());
-            if (submitResp.statusCode() != 200) {
-                throw new Exception("Submit HTTP " + submitResp.statusCode() + ": " + submitResp.body().substring(0, Math.min(300, submitResp.body().length()))); // 截取前300字符避免日志过长
-            }
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode submitRoot = mapper.readTree(submitResp.body());
-            String jobId = submitRoot.path("data").path("jobId").asText(""); // 提取异步任务ID
-            if (jobId.isEmpty()) {
-                throw new Exception("No jobId in response: " + submitResp.body());
-            }
-
-            long deadline = System.currentTimeMillis() + (long) paddleTimeoutSec * 1000; // 计算超时截止时间
-            String resultJsonUrl = "";
-            while (System.currentTimeMillis() < deadline) { // 轮询等待任务完成
-                Thread.sleep(paddlePollIntervalSec * 1000L); // 按配置间隔轮询
-                HttpRequest pollReq = HttpRequest.newBuilder()
-                        .uri(URI.create(paddleApiUrl + "/" + jobId)) // 查询任务状态
-                        .timeout(Duration.ofSeconds(30))
-                        .header("Authorization", "bearer " + paddleApiToken)
-                        .GET().build();
-                HttpResponse<String> pollResp = httpClient.send(pollReq, HttpResponse.BodyHandlers.ofString());
-                if (pollResp.statusCode() != 200) {
-                    throw new Exception("Poll HTTP " + pollResp.statusCode());
-                }
-                com.fasterxml.jackson.databind.JsonNode pollRoot = mapper.readTree(pollResp.body());
-                com.fasterxml.jackson.databind.JsonNode data = pollRoot.path("data");
-                String state = data.path("state").asText("");
-                if ("done".equals(state)) { // 任务完成
-                    resultJsonUrl = data.path("resultUrl").path("jsonUrl").asText(""); // 获取结果JSON下载地址
-                    break;
-                } else if ("failed".equals(state)) { // 任务失败
-                    throw new Exception("AIStudio job failed: " + data.path("errorMsg").asText("unknown"));
-                } else if (!"pending".equals(state) && !"running".equals(state)) { // 未知状态
-                    throw new Exception("AIStudio unknown state: " + state);
-                }
-            }
-            if (resultJsonUrl.isEmpty()) {
-                throw new TimeoutException("AIStudio job timeout after " + paddleTimeoutSec + "s"); // 轮询超时
-            }
-
-            HttpRequest resultReq = HttpRequest.newBuilder()
-                    .uri(URI.create(resultJsonUrl)) // 下载OCR结果
-                    .timeout(Duration.ofSeconds(60))
-                    .GET().build();
-            HttpResponse<String> resultResp = httpClient.send(resultReq, HttpResponse.BodyHandlers.ofString());
-            if (resultResp.statusCode() != 200) {
-                throw new Exception("Result HTTP " + resultResp.statusCode());
-            }
-            return parseAiStudioResult(resultResp.body()); // 解析AIStudio返回的JSONL结果
-        } catch (Exception e) {
-            throw new BusinessException("PaddleOCR failed: " + e.getMessage(), HttpStatus.BAD_GATEWAY); // 包装为业务异常
-        }
-    }
-
-    private String parseAiStudioResult(String jsonlText) {
-        java.util.List<String> lines = new java.util.ArrayList<>();
-        for (String rawLine : jsonlText.split("\n")) { // JSONL格式，每行一个JSON对象
-            rawLine = rawLine.trim();
-            if (rawLine.isEmpty()) continue;
-            try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                com.fasterxml.jackson.databind.JsonNode item = mapper.readTree(rawLine);
-                com.fasterxml.jackson.databind.JsonNode result = item.path("result");
-                for (com.fasterxml.jackson.databind.JsonNode res : result.path("layoutParsingResults")) { // 遍历版面解析结果
-                    String text = res.path("markdown").path("text").asText(""); // 提取markdown格式的文本
-                    for (String line : text.split("\n")) {
-                        line = line.strip();
-                        if (!line.isEmpty()) lines.add(line); // 逐行收集非空文本
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return String.join("\n", lines); // 合并为纯文本
-    }
-
-    public String callBaiduOcr(byte[] imageBytes) {
-        if (imageBytes == null || imageBytes.length == 0) {
-            throw new BusinessException("image bytes empty", HttpStatus.BAD_REQUEST); // 图片数据为空
-        }
-        try {
-            String token = getBaiduToken(); // 获取百度API访问令牌
-            String imageBase64 = Base64.getEncoder().encodeToString(imageBytes); // 图片Base64编码
-            String body = "image=" + java.net.URLEncoder.encode(imageBase64, java.nio.charset.StandardCharsets.UTF_8)
-                    + "&language_type=CHN_ENG&detect_direction=false&paragraph=false&probability=false"; // 中英文混合识别，关闭方向检测和段落合并
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create("https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic?access_token=" + token)) // 通用文字识别接口
-                    .timeout(Duration.ofSeconds(15))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200) {
-                throw new Exception("HTTP " + resp.statusCode());
-            }
-            return parseBaiduResponse(resp.body()); // 解析百度OCR返回结果
-        } catch (Exception e) {
-            throw new BusinessException("Baidu OCR failed: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
-        }
-    }
-
-    private String parseBaiduResponse(String responseBody) {
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(responseBody);
-            com.fasterxml.jackson.databind.JsonNode words = root.get("words_result"); // 提取识别结果数组
-            if (words == null || !words.isArray()) {
-                return responseBody; // 非预期格式时返回原始响应
-            }
-            java.util.List<String> lines = new java.util.ArrayList<>();
-            for (com.fasterxml.jackson.databind.JsonNode w : words) {
-                String line = w.path("words").asText(""); // 提取每行文字
-                if (!line.isBlank()) {
-                    lines.add(line);
-                }
-            }
-            return String.join("\n", lines); // 合并为纯文本
-        } catch (Exception e) {
-            return responseBody; // 解析失败返回原始响应
-        }
-    }
-
-    private String getBaiduToken() {
-        try {
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create("https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials"
-                            + "&client_id=" + baiduApiKey + "&client_secret=" + baiduSecretKey)) // 使用API Key和Secret Key获取token
-                    .timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(HttpRequest.BodyPublishers.noBody()) // 无请求体，参数在URL中
-                    .build();
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200) {
-                throw new Exception("HTTP " + resp.statusCode());
-            }
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(resp.body());
-            String accessToken = root.path("access_token").asText(""); // 提取访问令牌
-            if (accessToken.isBlank()) {
-                throw new Exception("No access_token");
-            }
-            return accessToken;
-        } catch (Exception e) {
-            throw new BusinessException("Baidu token failed: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
     }
 
@@ -1438,7 +1231,7 @@ public class OcrService {
         int taskId = enqueueImage(recordId, imageId, fileName, mimeType); // 入队OCR任务
         processOcrTask(taskId); // 立即提交处理
         Map<String, Object> record = recordMapper.selectMapById(recordId);
-        return Map.of("record_id", recordId, "image_id", imageId, "task_id", taskId,
+        return Map.of("id", recordId, "record_id", recordId, "image_id", imageId, "task_id", taskId, "status", "pending",
                 "record", record == null ? Map.of() : DbSupport.normalizeRow(record)); // 返回记录、图片和任务信息
     }
 
@@ -1449,8 +1242,9 @@ public class OcrService {
             if (record == null) {
                 throw new BusinessException("记录不存在", HttpStatus.NOT_FOUND);
             }
-            return Map.of("status", "no_task", "record", DbSupport.normalizeRow(record)); // 无OCR任务返回no_task状态
+            return Map.of("status", "no_task", "ocr_status", "no_task", "record", DbSupport.normalizeRow(record)); // 无OCR任务返回no_task状态
         }
-        return Map.of("status", DbSupport.trim(task.get("status")), "task", DbSupport.normalizeRow(task)); // 返回任务状态
+        String status = DbSupport.trim(task.get("status"));
+        return Map.of("status", status, "ocr_status", status, "task", DbSupport.normalizeRow(task)); // 返回任务状态
     }
 }

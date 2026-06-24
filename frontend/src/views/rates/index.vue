@@ -8,18 +8,42 @@ import {
   updateRate as updateRateApi,
   deleteRate as deleteRateApi
 } from '@/service/api/business';
-import type { FreightRate } from '@/service/api/types';
+import type { FreightRate, RateCreateData, RateUpdateData } from '@/service/api/types';
 import { useCollections } from '@/hooks/business/use-collections';
 import { today } from '@/utils/business';
 
 defineOptions({ name: 'Rates' });
+
+type RateFilter = {
+  company: string;
+  sender: string;
+  dest: string;
+  status: '' | 'active' | 'future' | 'expired';
+};
+
+type RateFormState = {
+  id: number | null;
+  origin: string;
+  sender: string;
+  destination: string;
+  price_per_ton: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  note: string;
+};
+
+type RateStatus = {
+  key: 'active' | 'future' | 'expired';
+  text: string;
+  type: 'success' | 'warning' | 'default';
+};
 
 const message = useMessage();
 const saving = ref(false);
 const rates = ref<FreightRate[]>([]);
 const { loadCollections, optionsFor } = useCollections();
 const rateOpen = ref(false);
-const filter = reactive({ company: '', sender: '', dest: '', status: '' });
+const filter = reactive<RateFilter>({ company: '', sender: '', dest: '', status: '' });
 
 const createFormRef = ref<FormInst | null>(null);
 const rateFormRef = ref<FormInst | null>(null);
@@ -35,26 +59,24 @@ const page = ref(1);
 const pageSize = 20;
 const total = ref(0);
 
-const rateForm = reactive({
-  id: null as number | null,
+const rateForm = reactive<RateFormState>({
+  id: null,
   origin: '',
   sender: '',
   destination: '',
-  price_per_ton: null as number | null,
-  surcharge: null as number | null,
-  effective_from: null as string | null,
-  effective_to: null as string | null,
+  price_per_ton: null,
+  effective_from: null,
+  effective_to: null,
   note: ''
 });
 
-const createForm = reactive({
+const createForm = reactive<Omit<RateFormState, 'id'>>({
   origin: '',
   sender: '',
   destination: '',
-  price_per_ton: null as number | null,
-  surcharge: null as number | null,
-  effective_from: null as string | null,
-  effective_to: null as string | null,
+  price_per_ton: null,
+  effective_from: null,
+  effective_to: null,
   note: ''
 });
 
@@ -79,7 +101,7 @@ const filteredRates = computed(() =>
   })
 );
 
-const rateColumns: DataTableColumns<any> = [
+const rateColumns: DataTableColumns<FreightRate> = [
   { title: 'ID', key: 'id', width: 70 },
   { title: '开单公司', key: 'origin', minWidth: 200 },
   { title: '发货单位', key: 'sender', minWidth: 180 },
@@ -135,7 +157,7 @@ function rateTo(rate: FreightRate) {
   return rate.effective_to || '';
 }
 
-function rateStatus(rate: FreightRate) {
+function rateStatus(rate: FreightRate): RateStatus {
   const current = today();
   const from = fmtDate(rateFrom(rate));
   const to = fmtDate(rateTo(rate));
@@ -178,7 +200,7 @@ function openRate(row: FreightRate | null = null) {
           note: row.note || ''
         }
       : {
-          id: 0,
+          id: null,
           origin: '',
           sender: '',
           destination: '',
@@ -219,7 +241,7 @@ async function createRateItem() {
   }
   saving.value = true;
   try {
-    await createRateApi({
+    const payload: RateCreateData = {
       origin: createForm.origin,
       sender: createForm.sender || '',
       destination: createForm.destination,
@@ -227,7 +249,8 @@ async function createRateItem() {
       effective_from: createForm.effective_from || '',
       effective_to: createForm.effective_to || undefined,
       note: createForm.note || ''
-    });
+    };
+    await createRateApi(payload);
     message.success('运价已添加');
     resetCreateForm();
     await loadRates();
@@ -250,18 +273,30 @@ async function saveRate() {
     return;
   }
   saving.value = true;
-  const body = {
-    origin: rateForm.origin,
-    sender: rateForm.sender || '',
-    destination: rateForm.destination,
-    price_per_ton: Number(rateForm.price_per_ton),
-    effective_from: rateForm.effective_from || '',
-    effective_to: rateForm.effective_to || undefined,
-    note: rateForm.note || ''
-  };
   try {
-    if (rateForm.id) await updateRateApi(rateForm.id, body);
-    else await createRateApi(body);
+    if (rateForm.id) {
+      const updatePayload: RateUpdateData = {
+        origin: rateForm.origin,
+        sender: rateForm.sender || '',
+        destination: rateForm.destination,
+        price_per_ton: Number(rateForm.price_per_ton),
+        effective_from: rateForm.effective_from || '',
+        effective_to: rateForm.effective_to || undefined,
+        note: rateForm.note || ''
+      };
+      await updateRateApi(rateForm.id, updatePayload);
+    } else {
+      const createPayload: RateCreateData = {
+        origin: rateForm.origin,
+        sender: rateForm.sender || '',
+        destination: rateForm.destination,
+        price_per_ton: Number(rateForm.price_per_ton),
+        effective_from: rateForm.effective_from || '',
+        effective_to: rateForm.effective_to || undefined,
+        note: rateForm.note || ''
+      };
+      await createRateApi(createPayload);
+    }
     message.success('运价已保存');
     rateOpen.value = false;
     await loadRates();
@@ -274,16 +309,21 @@ async function saveRate() {
 }
 
 async function deleteRateItem(id: number) {
-  await deleteRateApi(id);
-  message.success('运价已删除');
-  loadRates();
+  try {
+    await deleteRateApi(id);
+    message.success('运价已删除');
+    await loadRates();
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '删除失败');
+  }
 }
 
 onMounted(loadAll);
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="运价资料" :bordered="false" size="small">
       <template #header-extra>
         <NSpace>
@@ -300,7 +340,7 @@ onMounted(loadAll);
           label-placement="top"
           :show-feedback="false"
         >
-          <NGrid :cols="4" :x-gap="12">
+          <NGrid :cols="4" responsive="screen" item-responsive :x-gap="12">
             <NGi>
               <NFormItem label="开单公司">
                 <NSelect
@@ -430,7 +470,13 @@ onMounted(loadAll);
 
       <!-- 运价列表 -->
       <NCard title="线路运价" content-style="padding: 0">
-        <NDataTable :columns="rateColumns" :data="filteredRates" :row-key="(row: FreightRate) => row.id" striped />
+        <NDataTable
+          :columns="rateColumns"
+          :data="filteredRates"
+          :row-key="(row: FreightRate) => row.id"
+          :scroll-x="1320"
+          striped
+        />
         <div class="flex justify-end p-12px">
           <NPagination v-model:page="page" :page-size="pageSize" :item-count="total" @update:page="loadRates" />
         </div>
@@ -438,30 +484,35 @@ onMounted(loadAll);
     </NCard>
 
     <!-- 编辑弹窗 -->
-    <NModal v-model:show="rateOpen" preset="card" :title="rateForm.id ? '编辑运价' : '新增运价'" style="width: 680px">
+    <NModal
+      v-model:show="rateOpen"
+      preset="card"
+      :title="rateForm.id ? '编辑运价' : '新增运价'"
+      style="width: min(680px, 96vw)"
+    >
       <NForm ref="rateFormRef" :model="rateForm" :rules="rateFormRules" label-placement="top" :show-feedback="false">
-        <NGrid :cols="2" :x-gap="12">
-          <NGi>
+        <NGrid :cols="2" :x-gap="12" responsive="screen" item-responsive>
+          <NGi span="2 m:1">
             <NFormItem label="开单公司">
               <NSelect v-model:value="rateForm.origin" filterable tag :options="companyOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="发货单位">
               <NSelect v-model:value="rateForm.sender" filterable tag :options="senderOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="收货单位">
               <NSelect v-model:value="rateForm.destination" filterable tag :options="receiverOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="单价(元/吨)">
               <NInputNumber v-model:value="rateForm.price_per_ton" :min="0" :precision="2" style="width: 100%" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="起始日期">
               <NDatePicker
                 v-model:formatted-value="rateForm.effective_from"
@@ -471,7 +522,7 @@ onMounted(loadAll);
               />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="截止日期">
               <NDatePicker
                 v-model:formatted-value="rateForm.effective_to"
@@ -482,7 +533,7 @@ onMounted(loadAll);
               />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2">
             <NFormItem label="备注">
               <NInput v-model:value="rateForm.note" />
             </NFormItem>

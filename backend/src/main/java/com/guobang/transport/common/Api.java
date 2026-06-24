@@ -43,6 +43,7 @@ public final class Api {
         body.put("ok", false);
         // 设置错误信息
         body.put("error", message);
+        body.put("status", status.value());
         // 返回指定HTTP状态码的响应
         return ResponseEntity.status(status).body(body);
     }

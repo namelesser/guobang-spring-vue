@@ -3,7 +3,8 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import { useRoute, useRouter } from 'vue-router';
 import { useMessage, NButton, NPopconfirm, NTag, NCard, NDescriptions, NDescriptionsItem } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchRecords, createRecord, deleteRecord, fetchImage } from '@/service/api/business';
+import { fetchRecords, fetchImage, createRecord, deleteRecord } from '@/service/api/business';
+import type { RecordCreateData, TransportRecord } from '@/service/api/types';
 import { useCollections } from '@/hooks/business/use-collections';
 import { today, monthOptions, fmtNum, firstImageId, downloadExport } from '@/utils/business';
 
@@ -16,14 +17,18 @@ const message = useMessage();
 
 const loading = ref(false);
 const saving = ref(false);
-const rows = ref<any[]>([]);
+const rows = ref<TransportRecord[]>([]);
 const total = ref(0);
 const page = ref(1);
 let searchTimer: number | null = null;
 let abortController: AbortController | null = null;
 let applyingRouteQuery = false;
 const createOpen = ref(false);
-const createForm = reactive({
+type RecordCreateForm = Omit<RecordCreateData, 'net_weight'> & {
+  net_weight: number | null;
+};
+
+const createForm = reactive<RecordCreateForm>({
   record_date: today(),
   order_no: '',
   sender: '',
@@ -35,7 +40,7 @@ const createForm = reactive({
   note: ''
 });
 const viewerOpen = ref(false);
-const viewer = reactive({ record: null as Record<string, unknown> | null, index: 0, image: '' });
+const viewer = reactive({ record: null as TransportRecord | null, index: 0, image: '' });
 const { loadCollections, optionsFor } = useCollections();
 
 const filters = reactive({
@@ -84,7 +89,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateTableHeight);
 });
 
-const detailGroups = [
+type DetailField = [keyof TransportRecord, string];
+
+const detailGroups: Array<{ title: string; fields: DetailField[] }> = [
   {
     title: '基本信息',
     fields: [
@@ -94,7 +101,7 @@ const detailGroups = [
       ['sender', '发货单位'],
       ['receiver', '收货单位'],
       ['plate_no', '车牌号']
-    ] as [string, string][]
+    ]
   },
   {
     title: '费用信息',
@@ -103,7 +110,7 @@ const detailGroups = [
       ['freight_rate', '运费单价'],
       ['detour_surcharge', '绕路加价'],
       ['total_cost', '总费用']
-    ] as [string, string][]
+    ]
   },
   {
     title: '状态信息',
@@ -112,11 +119,15 @@ const detailGroups = [
       ['ocr_status', 'OCR状态'],
       ['review_note', '审核备注'],
       ['note', '备注']
-    ] as [string, string][]
+    ]
   }
 ];
 
-const columns: DataTableColumns<any> = [
+function recordValue(key: keyof TransportRecord) {
+  return viewer.record?.[key];
+}
+
+const columns: DataTableColumns<TransportRecord> = [
   { title: 'ID', key: 'id', width: 65, fixed: 'left', ellipsis: { tooltip: true } },
   { title: '日期', key: 'record_date', width: 105, render: row => (row.record_date || '').slice(0, 10) },
   { title: '单号', key: 'order_no', minWidth: 120, ellipsis: { tooltip: true } },
@@ -140,7 +151,9 @@ const columns: DataTableColumns<any> = [
     key: 'reviewed',
     width: 85,
     render: row =>
-      h(NTag, { size: 'small', type: row.reviewed ? 'success' : 'warning', round: true }, () => (row.reviewed ? '已核对' : '未核对'))
+      h(NTag, { size: 'small', type: row.reviewed ? 'success' : 'warning', round: true }, () =>
+        row.reviewed ? '已核对' : '未核对'
+      )
   },
   {
     title: '操作',
@@ -244,19 +257,15 @@ async function exportRecords(format: 'xls' | 'csv') {
   }
 }
 
-async function openViewer(row: Record<string, unknown>) {
+async function openViewer(row: TransportRecord) {
   viewer.record = row;
   viewer.index = rows.value.indexOf(row);
   viewer.image = '';
   viewerOpen.value = true;
   const id = firstImageId(row);
   if (!id) return;
-  try {
-    const data = await fetchImage(Number(id));
-    viewer.image = data.image_base64 || '';
-  } catch (e) {
-    console.error('加载图片失败:', e);
-  }
+  const data = await fetchImage(Number(id));
+  viewer.image = data.image_base64 || '';
 }
 
 function viewerMove(step: number) {
@@ -360,32 +369,32 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="运输记录" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
+        <NSpace wrap>
           <NButton type="primary" @click="openCreate">手动录入</NButton>
         </NSpace>
       </template>
 
       <!-- 统计卡片 -->
-      <NGrid :cols="4" :x-gap="12" :y-gap="12" class="mb-16px">
-        <NGi>
+      <NGrid :cols="4" :x-gap="12" :y-gap="12" responsive="screen" item-responsive class="mb-16px">
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="当前结果">{{ total }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="本页记录">{{ rows.length }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="已核对">{{ reviewedCount }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="未核对">{{ unreviewedCount }}</NStatistic>
           </NCard>
@@ -466,9 +475,9 @@ onBeforeUnmount(() => {
             <NFormItem label="单号">
               <NInput v-model:value="filters.orderNo" clearable placeholder="单号" style="width: 140px" />
             </NFormItem>
-            <NButton @click="resetFilters">重置</NButton>
-            <NButton @click="exportRecords('xls')">导出 XLS</NButton>
-            <NButton @click="exportRecords('csv')">导出 CSV</NButton>
+            <NButton secondary @click="resetFilters">重置</NButton>
+            <NButton secondary @click="exportRecords('xls')">导出 XLS</NButton>
+            <NButton secondary @click="exportRecords('csv')">导出 CSV</NButton>
           </NSpace>
         </NForm>
       </NSpace>
@@ -477,9 +486,10 @@ onBeforeUnmount(() => {
         :columns="columns"
         :data="rows"
         :loading="loading"
-        :row-key="(row: Record<string, unknown>) => (row.id as string | number)"
+        :row-key="(row: TransportRecord) => row.id"
         :max-height="tableMaxHeight"
         :row-class-name="() => 'record-row'"
+        :scroll-x="1500"
         remote
         striped
         size="medium"
@@ -491,7 +501,7 @@ onBeforeUnmount(() => {
     </NCard>
 
     <!-- 详情弹窗 -->
-    <NModal v-model:show="viewerOpen" preset="card" title="记录详情" style="width: 92vw">
+    <NModal v-model:show="viewerOpen" preset="card" title="记录详情" style="width: min(1200px, 96vw)">
       <template v-if="viewer.record">
         <!-- 翻页导航 -->
         <NSpace justify="space-between" align="center" style="margin-bottom: 16px">
@@ -501,33 +511,60 @@ onBeforeUnmount(() => {
         </NSpace>
 
         <!-- 主内容区：左图右表 -->
-        <div style="display: grid; grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr); gap: 20px">
+        <div class="record-detail-layout">
           <!-- 左侧：图片 -->
-          <div style="text-align: center; background: #f8f9fa; border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: center; min-height: 300px">
-            <img v-if="viewer.image" :src="viewer.image" style="max-width: 100%; max-height: 60vh; border-radius: 4px" />
+          <div class="record-detail-image">
+            <img
+              v-if="viewer.image"
+              :src="viewer.image"
+              style="max-width: 100%; max-height: 60vh; border-radius: 4px"
+            />
             <NEmpty v-else description="暂无图片" />
           </div>
 
           <!-- 右侧：分组详情 -->
-          <div style="display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 60vh">
+          <div class="record-detail-panels">
             <NCard v-for="group in detailGroups" :key="group.title" :title="group.title" size="small" :bordered="true">
               <NDescriptions :column="2" label-placement="left" size="small">
-                <NDescriptionsItem v-for="[key, label] in group.fields" :key="key" :label="label" :span="key === 'note' || key === 'review_note' ? 2 : 1">
-                  <template v-if="key === 'net_weight' || key === 'freight_rate' || key === 'detour_surcharge' || key === 'total_cost'">
-                    {{ fmtNum(viewer.record[key]) }}
+                <NDescriptionsItem
+                  v-for="[key, label] in group.fields"
+                  :key="key"
+                  :label="label"
+                  :span="key === 'note' || key === 'review_note' ? 2 : 1"
+                >
+                  <template
+                    v-if="
+                      key === 'net_weight' ||
+                        key === 'freight_rate' ||
+                        key === 'detour_surcharge' ||
+                        key === 'total_cost'
+                    "
+                  >
+                    {{ fmtNum(recordValue(key)) }}
                   </template>
                   <template v-else-if="key === 'source'">
-                    <NTag size="small" :type="viewer.record[key] === 'ocr' ? 'info' : 'default'">
-                      {{ viewer.record[key] === 'ocr' ? 'OCR' : '手动' }}
+                    <NTag size="small" :type="recordValue(key) === 'ocr' ? 'info' : 'default'">
+                      {{ recordValue(key) === 'ocr' ? 'OCR' : '手动' }}
                     </NTag>
                   </template>
                   <template v-else-if="key === 'ocr_status'">
-                    <NTag size="small" :type="viewer.record[key] === 'success' ? 'success' : viewer.record[key] === 'failed' ? 'error' : 'warning'">
-                      {{ viewer.record[key] === 'success' ? '成功' : viewer.record[key] === 'failed' ? '失败' : viewer.record[key] || '-' }}
+                    <NTag
+                      size="small"
+                      :type="
+                        recordValue(key) === 'success' ? 'success' : recordValue(key) === 'failed' ? 'error' : 'warning'
+                      "
+                    >
+                      {{
+                        recordValue(key) === 'success'
+                          ? '成功'
+                          : recordValue(key) === 'failed'
+                            ? '失败'
+                            : recordValue(key) || '-'
+                      }}
                     </NTag>
                   </template>
                   <template v-else>
-                    {{ viewer.record[key] ?? '-' }}
+                    {{ recordValue(key) ?? '-' }}
                   </template>
                 </NDescriptionsItem>
               </NDescriptions>
@@ -538,10 +575,10 @@ onBeforeUnmount(() => {
     </NModal>
 
     <!-- 手动录入弹窗 -->
-    <NModal v-model:show="createOpen" preset="card" title="手动录入记录" style="width: 760px">
+    <NModal v-model:show="createOpen" preset="card" title="手动录入记录" style="width: min(760px, 96vw)">
       <NForm label-placement="top">
-        <NGrid :cols="2" :x-gap="12">
-          <NGi>
+        <NGrid :cols="2" :x-gap="12" responsive="screen" item-responsive>
+          <NGi span="2 m:1">
             <NFormItem label="日期">
               <NDatePicker
                 v-model:formatted-value="createForm.record_date"
@@ -551,35 +588,35 @@ onBeforeUnmount(() => {
               />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="单号"><NInput v-model:value="createForm.order_no" /></NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="发货单位">
               <NSelect v-model:value="createForm.sender" filterable :options="senderOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="收货单位">
               <NSelect v-model:value="createForm.receiver" filterable :options="receiverOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="开单公司">
               <NSelect v-model:value="createForm.company" filterable :options="companyOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="车牌号">
               <NSelect v-model:value="createForm.plate_no" filterable :options="plateOptions" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="净重(吨)">
               <NInputNumber v-model:value="createForm.net_weight" :min="0" :precision="2" style="width: 100%" />
             </NFormItem>
           </NGi>
-          <NGi>
+          <NGi span="2 m:1">
             <NFormItem label="绕路加价">
               <NInputNumber v-model:value="createForm.detour_surcharge" :min="0" :precision="2" style="width: 100%" />
             </NFormItem>
@@ -598,6 +635,44 @@ onBeforeUnmount(() => {
     </NModal>
   </div>
 </template>
+
+<style scoped>
+.record-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr);
+  gap: 20px;
+}
+
+.record-detail-image {
+  text-align: center;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.record-detail-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+@media (max-width: 960px) {
+  .record-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .record-detail-panels {
+    max-height: none;
+    overflow: visible;
+  }
+}
+</style>
 
 <style scoped>
 :deep(.record-row td) {

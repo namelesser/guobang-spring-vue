@@ -1,6 +1,5 @@
 import { defineConfig, transformerDirectives, transformerVariantGroup, presetWind3 } from 'unocss';
 import { presetSoybeanAdmin } from '@sa/uno-preset';
-import { themeVars } from './src/theme/vars';
 
 export default defineConfig({
   content: {
@@ -9,7 +8,6 @@ export default defineConfig({
     }
   },
   theme: {
-    ...themeVars,
     fontSize: {
       'icon-xs': '0.875rem',
       'icon-small': '1rem',

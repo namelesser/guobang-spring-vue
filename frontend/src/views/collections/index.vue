@@ -9,6 +9,7 @@ import {
   updateCollection,
   deleteCollection
 } from '@/service/api/business';
+import type { CollectionItem } from '@/service/api/types';
 
 defineOptions({ name: 'Collections' });
 
@@ -21,8 +22,8 @@ const newValue = ref('');
 const editOpen = ref(false);
 const editId = ref(0);
 const editValue = ref('');
-const items = ref<any[]>([]);
-const allCollections = ref<Record<string, any[]>>({});
+const items = ref<CollectionItem[]>([]);
+const allCollections = ref<Record<string, CollectionItem[]>>({});
 
 const page = ref(1);
 const pageSize = 20;
@@ -57,7 +58,7 @@ const filteredItems = computed(() => {
   );
 });
 
-const columns: DataTableColumns<any> = [
+const columns: DataTableColumns<CollectionItem> = [
   { title: 'ID', key: 'id', width: 70 },
   {
     title: '类别',
@@ -86,7 +87,7 @@ const columns: DataTableColumns<any> = [
   }
 ];
 
-function sortRows(rows: any[]) {
+function sortRows(rows: CollectionItem[]) {
   return rows.sort((a, b) => String(a.value || '').localeCompare(String(b.value || ''), 'zh-CN'));
 }
 
@@ -96,8 +97,9 @@ async function loadAll() {
     const data = await fetchAllCollections();
     allCollections.value = data.collections || {};
     await loadItems();
-  } catch (error: any) {
-    message.error(error?.message || '加载失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '加载失败');
   } finally {
     loading.value = false;
   }
@@ -109,8 +111,9 @@ async function loadItems() {
     const data = await fetchCollections(category.value, { offset: (page.value - 1) * pageSize, limit: pageSize });
     items.value = sortRows(data.items || []);
     total.value = data.total || 0;
-  } catch (error: any) {
-    message.error(error?.message || '加载失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '加载失败');
   }
 }
 
@@ -123,14 +126,15 @@ async function addItem() {
     message.success('已新增');
     newValue.value = '';
     await loadAll();
-  } catch (error: any) {
-    message.error(error?.message || '新增失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '新增失败');
   } finally {
     saving.value = false;
   }
 }
 
-function openEdit(row: any) {
+function openEdit(row: CollectionItem) {
   editId.value = row.id;
   editValue.value = row.value || '';
   editOpen.value = true;
@@ -145,8 +149,9 @@ async function saveItem() {
     message.success('已保存');
     editOpen.value = false;
     await loadAll();
-  } catch (error: any) {
-    message.error(error?.message || '保存失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '保存失败');
   } finally {
     saving.value = false;
   }
@@ -157,8 +162,9 @@ async function deleteItem(id: number) {
     await deleteCollection(id);
     message.success('已删除');
     await loadAll();
-  } catch (error: any) {
-    message.error(error?.message || '删除失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '删除失败');
   }
 }
 
@@ -166,15 +172,15 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="基础资料 / 车辆管理" :bordered="false" size="small">
       <template #header-extra>
         <NButton @click="loadAll">刷新</NButton>
       </template>
 
       <!-- 统计卡片 -->
-      <NGrid :cols="5" :x-gap="12" class="mb-16px">
-        <NGi v-for="item in summary" :key="item.key">
+      <NGrid :cols="5" :x-gap="12" :y-gap="12" responsive="screen" item-responsive class="mb-16px">
+        <NGi v-for="item in summary" :key="item.key" span="5 s:3 m:2 l:1">
           <NCard size="small" :bordered="false" class="text-center">
             <div class="text-12px text-gray-500">{{ item.label }}</div>
             <div class="text-24px font-bold mt-4px">{{ item.count }}</div>
@@ -218,7 +224,8 @@ onMounted(loadAll);
           :columns="columns"
           :data="filteredItems"
           :loading="loading"
-          :row-key="(row: any) => row.id"
+          :row-key="(row: CollectionItem) => row.id"
+          :scroll-x="760"
           striped
         />
         <div class="flex justify-end p-12px">
@@ -228,7 +235,7 @@ onMounted(loadAll);
     </NCard>
 
     <!-- 编辑弹窗 -->
-    <NModal v-model:show="editOpen" preset="card" title="编辑基础资料" style="width: 460px">
+    <NModal v-model:show="editOpen" preset="card" title="编辑基础资料" style="width: min(460px, 96vw)">
       <NForm label-placement="top" :show-feedback="false">
         <NFormItem label="资料值">
           <NInput v-model:value="editValue" placeholder="请输入基础资料值" />

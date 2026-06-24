@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import { fetchCollections } from '@/service/api/business';
+import type { CollectionItem } from '@/service/api/types';
 
 export function useCollections() {
   const collectionCache: Record<string, string[]> = reactive({});
@@ -8,7 +9,7 @@ export function useCollections() {
     try {
       const data = await fetchCollections();
       const collections = data.collections || {};
-      for (const [cat, items] of Object.entries(collections) as [string, any[]][]) {
+      for (const [cat, items] of Object.entries(collections) as [string, CollectionItem[]][]) {
         if (!Array.isArray(items)) continue;
         collectionCache[cat] = items
           .map(item => String(item.value || '').trim())

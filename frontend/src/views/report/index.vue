@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useMessage, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { fetchReport } from '@/service/api/business';
+import type { ReportGroup, ReportResponse } from '@/service/api/types';
 import { useCollections } from '@/hooks/business/use-collections';
 import { currentMonth, fmtNum } from '@/utils/business';
 
@@ -12,13 +13,13 @@ defineOptions({ name: 'Report' });
 const router = useRouter();
 const message = useMessage();
 const loading = ref(false);
-const report = ref<Record<string, unknown> | null>(null);
+const report = ref<ReportResponse | null>(null);
 let reportTimer: number | null = null;
 let requestSeq = 0;
 const { loadCollections, optionsFor } = useCollections();
 const filters = reactive({ month: currentMonth(), company: '', sender: '', receiver: '', plate: '' });
 
-const gt = computed(() => (report.value?.grand_total as Record<string, unknown>) || {});
+const gt = computed(() => report.value?.grand_total ?? { trips: 0, total_weight: 0, total_freight: 0 });
 const avgRate = computed(() => {
   const weight = Number(gt.value.total_weight || 0);
   const freight = Number(gt.value.total_freight || 0);
@@ -31,7 +32,7 @@ const senderOptions = opts('sender');
 const receiverOptions = opts('receiver');
 const plateOptions = opts('plate_no');
 
-const columns: DataTableColumns<any> = [
+const columns: DataTableColumns<ReportGroup> = [
   { title: '线路', key: 'route', minWidth: 260, render: row => `${row.company || ''} -> ${row.receiver || ''}` },
   { title: '发货单位', key: 'sender', minWidth: 160 },
   { title: '收货单位', key: 'receiver', minWidth: 160 },
@@ -58,7 +59,7 @@ async function loadReport() {
   loading.value = true;
   try {
     const data = await fetchReport(buildReportParams());
-    if (seq === requestSeq) report.value = data as unknown as Record<string, unknown>;
+    if (seq === requestSeq) report.value = data;
   } catch (error: unknown) {
     const err = error as Error;
     if (seq === requestSeq) message.error(err?.message || '查询失败');
@@ -80,7 +81,7 @@ function resetFilters() {
   Object.assign(filters, { company: '', sender: '', receiver: '', plate: '' });
 }
 
-function goRecords(group: Record<string, unknown> | null = null) {
+function goRecords(group: ReportGroup | null = null) {
   const query: Record<string, string> = {};
   if (filters.month) query.month = filters.month;
   const company = String(group?.company || filters.company || '');
@@ -110,10 +111,10 @@ watch(filters, () => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="经营报表" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
+        <NSpace wrap>
           <NButton :disabled="!filters.month" @click="goRecords()">查看明细</NButton>
         </NSpace>
       </template>
@@ -176,23 +177,23 @@ watch(filters, () => {
       </NSpace>
 
       <!-- 统计卡片 -->
-      <NGrid v-if="report" :cols="4" :x-gap="12" :y-gap="12" class="mb-16px">
-        <NGi>
+      <NGrid v-if="report" :cols="4" :x-gap="12" :y-gap="12" responsive="screen" item-responsive class="mb-16px">
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="总车次">{{ gt.trips || 0 }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="总净重(吨)">{{ fmtNum(gt.total_weight) }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="总运费(元)">{{ fmtNum(gt.total_freight) }}</NStatistic>
           </NCard>
         </NGi>
-        <NGi>
+        <NGi span="4 s:2 m:1">
           <NCard embedded>
             <NStatistic label="均价(元/吨)">{{ avgRate }}</NStatistic>
           </NCard>
@@ -202,9 +203,12 @@ watch(filters, () => {
       <NSpin :show="loading">
         <NDataTable
           :columns="columns"
-          :data="(report?.groups as any[]) || []"
+          :data="report?.groups || []"
           :loading="loading"
-          :row-key="(row: Record<string, unknown>) => String(row.company) + String(row.receiver)"
+          :row-key="
+            (row: ReportGroup) => `${row.company || ''}-${row.receiver || ''}-${row.sender || ''}-${row.plate_no || ''}`
+          "
+          :scroll-x="1200"
           striped
         />
       </NSpin>

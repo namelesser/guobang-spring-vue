@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,12 +27,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RecordService {
-    private static final List<String> UPDATABLE = List.of(
+    private static final Set<String> UPDATABLE = Set.of(
             "file_name", "image_id", "record_date", "order_no", "sender", "receiver", "company",
             "plate_no", "net_weight", "driver", "freight_rate", "detour_surcharge", "total_cost",
             "reviewed", "reviewed_at", "review_note", "note", "ocr_status", "ocr_text"
     );
-    private static final List<String> REQUIRED_COLLECTION_FIELDS = List.of("sender", "receiver", "company", "plate_no");
+    private static final Set<String> REQUIRED_COLLECTION_FIELDS = Set.of("sender", "receiver", "company", "plate_no");
+    private static final Set<String> RATE_KEYS = Set.of("net_weight", "receiver", "company", "record_date", "detour_surcharge");
+    private static final Set<String> DATE_COLUMNS = Set.of("record_date");
+    private static final Set<String> DECIMAL_COLUMNS = Set.of("net_weight", "freight_rate", "detour_surcharge", "total_cost");
     public static final String REVIEWABLE_FILTER = """
             reviewed=0
             AND COALESCE(ocr_status, 'done') NOT IN ('pending', 'processing')
@@ -121,7 +125,7 @@ public class RecordService {
         if (shouldValidateCollections(data)) {
             collectionService.validateRecordCollections(merged);
         }
-        if (data.keySet().stream().anyMatch(SetLike.RATE_KEYS::contains)) {
+        if (data.keySet().stream().anyMatch(RATE_KEYS::contains)) {
             recalculatePricing(merged);
             data.put("freight_rate", merged.get("freight_rate"));
             data.put("total_cost", merged.get("total_cost"));
@@ -424,10 +428,10 @@ public class RecordService {
     }
 
     private Object convertColumnValue(String key, Object value) {
-        if (List.of("record_date").contains(key)) {
+        if (DATE_COLUMNS.contains(key)) {
             return DbSupport.date(value);
         }
-        if (List.of("net_weight", "freight_rate", "detour_surcharge", "total_cost").contains(key)) {
+        if (DECIMAL_COLUMNS.contains(key)) {
             return DbSupport.decimal(value);
         }
         return value;
@@ -555,9 +559,5 @@ public class RecordService {
     }
 
     private record FilterClause(String where, List<Object> params) {
-    }
-
-    private static final class SetLike {
-        private static final List<String> RATE_KEYS = List.of("net_weight", "receiver", "company", "record_date", "detour_surcharge");
     }
 }

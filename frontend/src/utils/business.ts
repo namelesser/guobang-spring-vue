@@ -23,9 +23,9 @@ export function fmtNum(v: unknown): string {
   return v == null || v === '' ? '' : Number(v).toFixed(2);
 }
 
-export function firstImageId(record: Record<string, unknown>): string {
+export function firstImageId(record: { first_image_id?: string; image_id?: string | null }): string {
   return (
-    (record.first_image_id as string) ||
+    record.first_image_id ||
     String(record.image_id || '')
       .split(',')[0]
       .trim()
@@ -34,6 +34,14 @@ export function firstImageId(record: Record<string, unknown>): string {
 
 export async function downloadExport(url: string, filename: string): Promise<void> {
   const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      throw new Error(data.error || `导出失败（${response.status}）`);
+    }
+    throw new Error(`导出失败（${response.status}）`);
+  }
   const blob = await response.blob();
   const a = document.createElement('a');
   const objectUrl = URL.createObjectURL(blob);

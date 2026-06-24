@@ -6,16 +6,10 @@ import com.guobang.transport.common.DateSupport;
 import com.guobang.transport.db.DbSupport;
 import com.guobang.transport.mapper.ImageMapper;
 import com.guobang.transport.mapper.RecordMapper;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import javax.imageio.ImageIO;
 import lombok.RequiredArgsConstructor;
 import org.apache.ibatis.session.SqlSession;
 import org.springframework.http.HttpStatus;
@@ -64,7 +58,7 @@ public class ImageService {
         imageMapper.insertImage(img); // 插入数据库获取自增ID
         int id = img.getId().intValue();
         try {
-            updateThumbnail(id, buildThumbnail(data), "image/jpeg"); // 异步生成缩略图，失败不影响主流程
+            updateThumbnail(id, ImageThumbnailer.build(data), "image/jpeg"); // 异步生成缩略图，失败不影响主流程
         } catch (Exception ignored) {
         }
         return id;
@@ -122,7 +116,7 @@ public class ImageService {
             if (original == null || original.bytes() == null) {
                 return null;
             }
-            bytes = buildThumbnail(original.bytes()); // 基于原图构建缩略图
+            bytes = ImageThumbnailer.build(original.bytes()); // 基于原图构建缩略图
             if (bytes == null) {
                 return null;
             }
@@ -150,7 +144,7 @@ public class ImageService {
         String finalName = fileName == null || fileName.isBlank() ? DbSupport.trim(old.get("file_name")) : fileName; // 文件名为空则保留原名
         imageMapper.updateImageData(finalName, data, mimeType, data.length, imageId); // 更新图片数据和元信息
         try {
-            updateThumbnail(imageId, buildThumbnail(data), "image/jpeg"); // 重新生成缩略图
+            updateThumbnail(imageId, ImageThumbnailer.build(data), "image/jpeg"); // 重新生成缩略图
         } catch (Exception ignored) {
         }
         return true;
@@ -186,7 +180,7 @@ public class ImageService {
                 sqlSession.selectList("com.guobang.transport.mapper.RecordMapper.selectListWithSql",
                         Map.of("sql", listSql, "params", params)));
         for (Map<String, Object> image : images) {
-            image.put("thumbnail_base64", thumbnailDataUrl((Integer) image.get("id"))); // 为每条记录附带缩略图Base64
+            image.put("thumbnail_base64", thumbnailDataUrl((Integer) image.get("id")));
         }
         return Map.of("images", images, "total", total == null ? 0 : total, "offset", offset, "limit", limit); // 返回分页结果
     }
@@ -284,33 +278,6 @@ public class ImageService {
         imageMapper.updateThumbnail(data, mimeType, imageId); // 写入缩略图数据到数据库
     }
 
-    private byte[] buildThumbnail(byte[] data) {
-        try {
-            BufferedImage src = ImageIO.read(new ByteArrayInputStream(data)); // 解码原始图片
-            if (src == null) {
-                return null;
-            }
-            int maxW = 120; // 缩略图最大宽度120px
-            int maxH = 90;  // 缩略图最大高度90px
-            double scale = Math.min((double) maxW / src.getWidth(), (double) maxH / src.getHeight()); // 等比缩放取最小比例
-            if (scale > 1) {
-                scale = 1; // 原图小于缩略图尺寸时不放大
-            }
-            int w = Math.max(1, (int) Math.round(src.getWidth() * scale)); // 计算缩放后宽度
-            int h = Math.max(1, (int) Math.round(src.getHeight() * scale)); // 计算缩放后高度
-            BufferedImage thumb = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB); // 创建RGB缩略图画布
-            Graphics2D g = thumb.createGraphics();
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR); // 使用双线性插值提高缩放质量
-            g.drawImage(src, 0, 0, w, h, null); // 绘制缩放后的图片
-            g.dispose(); // 释放图形资源
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            ImageIO.write(thumb, "jpg", out); // 编码为JPEG格式
-            return out.toByteArray();
-        } catch (Exception ex) {
-            return null; // 缩略图生成失败不影响主流程
-        }
-    }
-
     private FilterClause filterClause(Map<String, String> filters) {
         List<String> where = new ArrayList<>(); // WHERE条件列表
         List<Object> params = new ArrayList<>(); // 对应参数列表
@@ -375,7 +342,7 @@ public class ImageService {
                 record_agg AS (
                     SELECT ri.image_id,
                            COUNT(*) AS record_count,
-                           MIN(r.id) AS record_id,
+                           MIN(CASE WHEN r.reviewed = 0 THEN r.id END) AS record_id,
                            MIN(r.record_date) AS record_date,
                            MIN(r.order_no) AS order_no,
                            MIN(r.ocr_status) AS ocr_status,
