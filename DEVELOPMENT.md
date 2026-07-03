@@ -303,6 +303,8 @@ mybatis-plus:
 ### 8.1 运输记录（records）
 
 - 手动录入运输记录
+- 手动录入时自动预览匹配运费单价和预计总费用
+- 手动保存时按开单公司、发货单位、收货单位和日期匹配有效运价
 - OCR 扫描自动识别
 - 记录查询、筛选、分页
 - 记录导出（CSV/XLS）
@@ -313,16 +315,20 @@ mybatis-plus:
 - 上一条/下一条导航模式
 - 审核备注
 - 图片查看
+- 按完整运价资料加载路线选项，避免分页导致路线误判
+- 核对时按发货单位参与运价匹配
 
 ### 8.3 运价管理（rates）
 
 - 运价 CRUD
-- 按线路、日期查询运价
+- 按开单公司、发货单位、收货单位和日期查询运价
+- 提供全部运价接口供核对页路线校验使用
 - 分页显示
 
 ### 8.4 基础资料（collections）
 
 - 开单公司、发货单位、收货单位、车牌号管理
+- 兼容旧 `plate` 车牌分类并统一给前端 `plate_no` 使用
 - 分类筛选
 - 分页显示
 
@@ -449,6 +455,16 @@ public class XxxService {
 | 改进项 | 文件 | 说明 |
 |--------|------|------|
 | 表单验证 | `rates/index.vue` | 运价表单添加必填项验证（开单公司、收货单位、单价、起始日期） |
+| 核对页完整路线校验 | `RateController.java`、`review/index.vue` | 新增 `/api/rates/all`，核对页使用完整运价资料，避免分页遗漏导致误报路线不存在 |
+| 运价匹配增加发货单位 | `FreightRateMapper.java`、`RateService.java`、`RecordService.java` | 查价和重算费用时按开单公司、发货单位、收货单位、日期匹配，支持同收货不同发货的单价 |
+| 手动录入费用预览 | `records/index.vue` | 手动新增弹窗展示运费单价、预计总费用和未找到有效运价提示 |
+| 手动录入运价保护 | `RecordService.java` | 手动记录找不到有效运价时返回 422，避免创建已审核但无单价记录 |
+| 称重计量单解析标识 | `OcrService.java` | 移除旧 `__weighing_slip__` 标识，统一使用 `称重计量单` 显示解析入口 |
+| OCR 名称和车牌纠错 | `OcrService.java` | 场/厂类名称不自动补“有限公司”，称重计量单车牌按已有车牌做误读纠错 |
+| 车牌分类兼容 | `CollectionService.java` | 查询 `plate_no` 时兼容历史 `plate` 分类，新增时统一写入 `plate_no` |
+| 本地启动与日志忽略 | `start-all.sh`、`.gitignore` | 增加一键启动脚本并忽略 logs、pid 文件 |
+| 数据库字段同步 | `V4__add_records_driver.sql`、`DatabaseInitializer.java` | 增加 `records.driver` 迁移和后备建表字段 |
+| 服务监控消息格式 | `check_and_recover.py` | 自动恢复脚本输出适合通知推送的时间戳消息 |
 
 ---
 

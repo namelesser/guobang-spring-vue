@@ -185,7 +185,7 @@ public class OcrService {
             "望谟县里谷沟腾飞砂石有限公司", "腾飞砂石专用解析",
             "贵州森垚水泥有限公司", "森垚水泥专用解析",
             "贵州秀明建材有限公司", "秀明建材专用解析",
-            "__weighing_slip__", "称重计量单解析"
+            "称重计量单", "称重计量单解析"
     );
 
     private String getParserLabel(String company) {
@@ -202,7 +202,7 @@ public class OcrService {
     private static final Pattern DATE_COMPACT = Pattern.compile("(\\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])");
     private static final Pattern NET_WEIGHT = Pattern.compile("净[\\s\\n]*重[：:\\s]*([0-9]+(?:\\.[0-9]+)?)");
     private static final Pattern NET_WEIGHT2 = Pattern.compile("净[\\s\\n]*重[^\\d]{0,8}([0-9]+(?:\\.[0-9]+)?)");
-    private static final Pattern PLATE_ANY = Pattern.compile("([贵豫京沪粤鲁浙苏][A-Z]{1,2}\\d{4,5})");
+    private static final Pattern PLATE_ANY = Pattern.compile("([京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤川青藏琼宁][A-Z][A-Z0-9]{5,6})");
     private static final Pattern COMPANY_NAME_PAT = Pattern.compile("[\\u4e00-\\u9fff]{4,}(?:有限公司|有限责任公司|砂石场|沙石场|建材厂|砖厂)");
     private static final Pattern COMPANY_LABEL = Pattern.compile("(?:开单公司|开票公司|过磅单位|销售单位|供货单位)[：:\\s]*([^\\n]+)");
     private static final Pattern SENDER_LABEL = Pattern.compile("发货单位[：:\\s]*([^\\n]+)");
@@ -622,7 +622,7 @@ public class OcrService {
         s = s.replace("有有限公司", "有限公司"); // 修复OCR重复识别错误
         if (s.endsWith("有")) s = s.substring(0, s.length() - 1); // 去除末尾多余的"有"
         s = s.replace("有限公司公司", "有限公司"); // 修复重复"公司"
-        if (!s.contains("公司")) s += "有限公司"; // 缺少公司后缀时补全
+        if (!s.contains("公司") && !s.matches(".*(砂石场|沙石场|砖厂|建材厂)$")) s += "有限公司"; // 普通公司名缺后缀时补全，场/厂类名称保持原样
         if (s.endsWith("有限公司有限公司")) s = s.substring(0, s.length() - 4); // 去除重复后缀
         return s;
     }
@@ -640,6 +640,40 @@ public class OcrService {
         Matcher m = PLATE_ANY.matcher(text); // 匹配车牌号模式
         if (m.find() && validPlates.contains(m.group(1))) return m.group(1); // 仅返回在有效车牌集合中的结果
         return "";
+    }
+
+    private String extractPlateFromText(String text) {
+        Matcher m = PLATE_ANY.matcher(text); // 从全文提取车牌候选
+        return m.find() ? m.group(1) : "";
+    }
+
+    private String bestKnownPlate(String rawPlate, List<String> dbPlates, String fullText) {
+        if (dbPlates.isEmpty()) return rawPlate == null ? "" : rawPlate;
+        String raw = DbSupport.trim(rawPlate);
+        if (raw.isEmpty()) raw = extractPlateFromText(fullText);
+        if (raw.isEmpty()) return "";
+        for (String plate : dbPlates) {
+            if (raw.equals(plate) || fullText.contains(plate)) return plate; // 精确命中
+        }
+        if (raw.length() >= 2) {
+            String rawPrefix = raw.substring(0, 2);
+            String rawDigits = raw.replaceAll("\\D", "");
+            String best = "";
+            int bestScore = -1;
+            for (String plate : dbPlates) {
+                if (!plate.startsWith(rawPrefix)) continue; // 省份和首字母需一致
+                int score = 0;
+                for (char c : plate.replaceAll("\\D", "").toCharArray()) {
+                    if (rawDigits.indexOf(c) >= 0) score++; // 数字重合可修正 E/0、尾部多字符等 OCR 误读
+                }
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = plate;
+                }
+            }
+            if (bestScore >= 3) return best;
+        }
+        return bestKnownValue(raw, dbPlates, fullText, 0.60);
     }
 
     private Map<String, Object> parseTengfei(String ocrText, Map<String, Object> cfg) {
@@ -738,7 +772,7 @@ public class OcrService {
         out.put("order_no", extractNo(ocrText)); // 提取单号
         out.put("record_date", extractTime(ocrText)); // 提取日期
         out.put("net_weight", extractNetWeight(ocrText)); // 提取净重
-        out.put("plate_no", bestKnownValue(extractPlateAny(ocrText, dbPlates.isEmpty() ? ALL_PLATES : new java.util.HashSet<>(dbPlates)), dbPlates.isEmpty() ? new java.util.ArrayList<>(ALL_PLATES) : dbPlates, ocrText, 0.68)); // 车牌匹配
+        out.put("plate_no", bestKnownPlate(extractPlateFromText(ocrText), dbPlates.isEmpty() ? new java.util.ArrayList<>(ALL_PLATES) : dbPlates, ocrText)); // 车牌匹配
         Matcher m = SENDER_LABEL.matcher(ocrText);
         String sender = "";
         if (m.find()) {
@@ -804,7 +838,7 @@ public class OcrService {
         String company = identifyCompany(rawText); // 识别公司类型
         Map<String, Object> cfg = getCompanyProfiles().getOrDefault(company, Map.of()); // 获取公司配置
         Map<String, Object> fields;
-        if ("__weighing_slip__".equals(company) || "称重计量单".equals(company)) {
+        if ("称重计量单".equals(company)) {
             fields = parseWeighingSlip(rawText); // 称重计量单专用解析
         } else if ("望谟县里谷沟腾飞砂石有限公司".equals(company)) {
             fields = parseTengfei(rawText, cfg); // 腾飞砂石专用解析
@@ -930,6 +964,7 @@ public class OcrService {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
+    @Transactional
     public Map<String, Object> scan(MultipartFile image) throws Exception {
         String fileName = image.getOriginalFilename(); // 获取原始文件名
         if (fileName == null || fileName.isBlank()) {

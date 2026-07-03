@@ -3,7 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import { useRoute, useRouter } from 'vue-router';
 import { useMessage, NButton, NPopconfirm, NTag, NCard, NDescriptions, NDescriptionsItem } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchRecords, fetchImage, createRecord, deleteRecord } from '@/service/api/business';
+import { fetchRecords, fetchImage, createRecord, deleteRecord, lookupRate } from '@/service/api/business';
 import type { RecordCreateData, TransportRecord } from '@/service/api/types';
 import { useCollections } from '@/hooks/business/use-collections';
 import { today, monthOptions, fmtNum, firstImageId, downloadExport } from '@/utils/business';
@@ -24,6 +24,8 @@ let searchTimer: number | null = null;
 let abortController: AbortController | null = null;
 let applyingRouteQuery = false;
 const createOpen = ref(false);
+const createRateLoading = ref(false);
+const createRateMessage = ref('');
 type RecordCreateForm = Omit<RecordCreateData, 'net_weight'> & {
   net_weight: number | null;
 };
@@ -38,6 +40,10 @@ const createForm = reactive<RecordCreateForm>({
   net_weight: null as number | null,
   detour_surcharge: 0 as number,
   note: ''
+});
+const createPricing = reactive({
+  freight_rate: null as number | null,
+  total_cost: null as number | null
 });
 const viewerOpen = ref(false);
 const viewer = reactive({ record: null as TransportRecord | null, index: 0, image: '' });
@@ -286,8 +292,57 @@ function openCreate() {
     detour_surcharge: 0,
     note: ''
   });
+  Object.assign(createPricing, { freight_rate: null, total_cost: null });
+  createRateMessage.value = '';
   createOpen.value = true;
+  lookupCreateRate();
 }
+
+async function lookupCreateRate() {
+  const company = String(createForm.company || '').trim();
+  const sender = String(createForm.sender || '').trim();
+  const receiver = String(createForm.receiver || '').trim();
+  const date = createForm.record_date ? String(createForm.record_date).slice(0, 10) : '';
+  Object.assign(createPricing, { freight_rate: null, total_cost: null });
+  if (!company || !receiver || !date) {
+    createRateMessage.value = '';
+    return;
+  }
+  createRateLoading.value = true;
+  try {
+    const data = await lookupRate({ origin: company, sender, destination: receiver, date });
+    if (!data.found || !data.rate) {
+      createRateMessage.value = '未找到有效运价';
+      return;
+    }
+    const rate = Number(data.rate.price_per_ton || 0);
+    const net = Number(createForm.net_weight || 0);
+    const detour = Number(createForm.detour_surcharge || 0);
+    createPricing.freight_rate = rate;
+    createPricing.total_cost = net > 0 ? Number((net * (rate + detour)).toFixed(2)) : null;
+    createRateMessage.value = '';
+  } catch (error: unknown) {
+    console.error('查询运价失败:', error);
+    createRateMessage.value = '查询运价失败';
+  } finally {
+    createRateLoading.value = false;
+  }
+}
+
+watch(
+  () => [
+    createOpen.value,
+    createForm.record_date,
+    createForm.company,
+    createForm.sender,
+    createForm.receiver,
+    createForm.net_weight,
+    createForm.detour_surcharge
+  ],
+  () => {
+    if (createOpen.value) lookupCreateRate();
+  }
+);
 
 async function handleCreate() {
   if (
@@ -620,6 +675,32 @@ onBeforeUnmount(() => {
             <NFormItem label="绕路加价">
               <NInputNumber v-model:value="createForm.detour_surcharge" :min="0" :precision="2" style="width: 100%" />
             </NFormItem>
+          </NGi>
+          <NGi span="2 m:1">
+            <NFormItem label="运费单价">
+              <NInputNumber
+                :value="createPricing.freight_rate"
+                :loading="createRateLoading"
+                :precision="2"
+                readonly
+                placeholder="自动匹配"
+                style="width: 100%"
+              />
+            </NFormItem>
+          </NGi>
+          <NGi span="2 m:1">
+            <NFormItem label="预计总费用">
+              <NInputNumber
+                :value="createPricing.total_cost"
+                :precision="2"
+                readonly
+                placeholder="输入净重后计算"
+                style="width: 100%"
+              />
+            </NFormItem>
+          </NGi>
+          <NGi v-if="createRateMessage" :span="2">
+            <NAlert type="warning" :show-icon="false">{{ createRateMessage }}</NAlert>
           </NGi>
           <NGi :span="2">
             <NFormItem label="备注"><NInput v-model:value="createForm.note" type="textarea" /></NFormItem>

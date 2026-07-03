@@ -15,11 +15,13 @@ public interface FreightRateMapper extends BaseMapper<FreightRate> {
             SELECT id, price_per_ton, note FROM freight_rates
             WHERE (#{origin} ILIKE '%' || origin || '%' OR origin ILIKE '%' || #{origin2} || '%')
               AND (#{dest} ILIKE '%' || destination || '%' OR destination ILIKE '%' || #{dest2} || '%')
+              AND (#{sender} = '' OR sender = #{sender} OR sender IS NULL OR sender = '')
               AND effective_from <= #{from}
               AND (effective_to IS NULL OR effective_to >= #{to})
-            ORDER BY effective_from DESC LIMIT 1
+            ORDER BY CASE WHEN sender = #{sender} THEN 0 ELSE 1 END, effective_from DESC LIMIT 1
             """)
     Map<String, Object> lookup(@Param("origin") String origin, @Param("origin2") String origin2,
+                               @Param("sender") String sender,
                                @Param("dest") String dest, @Param("dest2") String dest2,
                                @Param("from") LocalDate from, @Param("to") LocalDate to);
 

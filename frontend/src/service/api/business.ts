@@ -150,6 +150,14 @@ export async function fetchRates(params?: Record<string, string | number>): Prom
   return data;
 }
 
+export async function fetchAllRates(): Promise<RatesResponse> {
+  const { data } = await request({
+    url: '/api/rates/all',
+    method: 'get'
+  });
+  return data;
+}
+
 export async function createRate(rateData: RateCreateData): Promise<void> {
   const { data } = await request({
     url: '/api/rates',
@@ -249,6 +257,7 @@ export async function rereviewImage(id: number): Promise<RereviewResponse> {
 
 export async function lookupRate(params: {
   origin: string;
+  sender?: string;
   destination: string;
   date?: string;
 }): Promise<RateLookupResponse> {

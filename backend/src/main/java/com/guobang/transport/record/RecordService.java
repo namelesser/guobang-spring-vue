@@ -54,6 +54,9 @@ public class RecordService {
         record.put("reviewed", 1);
         record.put("reviewed_at", LocalDateTime.now());
         recalculatePricing(record);
+        if (DbSupport.decimal(record.get("freight_rate")) == null) {
+            throw new BusinessException("未找到有效运价，请先在运价资料中添加路线或调整有效期", HttpStatus.UNPROCESSABLE_ENTITY);
+        }
         return insert(record);
     }
 
@@ -415,6 +418,7 @@ public class RecordService {
     public void recalculatePricing(Map<String, Object> record) {
         Map<String, Object> rate = rateService.lookup(
                 DbSupport.trim(record.get("company")),
+                DbSupport.trim(record.get("sender")),
                 DbSupport.trim(record.get("receiver")),
                 DbSupport.trim(record.get("record_date"))
         );

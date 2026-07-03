@@ -20,6 +20,20 @@ import org.springframework.stereotype.Service;
 public class CollectionService {
     private final CollectionMapper collectionMapper;
 
+    private String normalizedCategory(String category) {
+        String value = DbSupport.trim(category);
+        return "plate".equals(value) ? "plate_no" : value;
+    }
+
+    private QueryWrapper<Collection> categoryQuery(String category) {
+        String normalized = normalizedCategory(category);
+        QueryWrapper<Collection> qw = new QueryWrapper<Collection>();
+        if ("plate_no".equals(normalized)) {
+            return qw.in("category", "plate_no", "plate");
+        }
+        return qw.eq("category", normalized);
+    }
+
     /**
      * 获取指定分类的基础资料列表
      *
@@ -28,12 +42,12 @@ public class CollectionService {
      */
     public List<Collection> list(String category) {
         // 分类名称不能为空
-        if (DbSupport.trim(category).isBlank()) {
+        String normalized = normalizedCategory(category);
+        if (normalized.isBlank()) {
             throw new BusinessException("category 不能为空", HttpStatus.BAD_REQUEST);
         }
         // 按分类过滤并按值升序返回
-        return collectionMapper.selectList(new QueryWrapper<Collection>()
-                .eq("category", category.trim()).orderByAsc("value"));
+        return collectionMapper.selectList(categoryQuery(normalized).orderByAsc("value"));
     }
 
     /**
@@ -46,7 +60,8 @@ public class CollectionService {
      */
     public Map<String, Object> list(String category, int offset, int limit) {
         // 分类名称不能为空
-        if (DbSupport.trim(category).isBlank()) {
+        String normalized = normalizedCategory(category);
+        if (normalized.isBlank()) {
             throw new BusinessException("category 不能为空", HttpStatus.BAD_REQUEST);
         }
         // 校正分页参数
@@ -54,12 +69,10 @@ public class CollectionService {
         limit = Math.min(Math.max(limit, 1), 200);
 
         // 构建按分类过滤、按值升序的查询条件
-        QueryWrapper<Collection> qw = new QueryWrapper<Collection>()
-                .eq("category", category.trim()).orderByAsc("value");
+        QueryWrapper<Collection> qw = categoryQuery(normalized).orderByAsc("value");
 
         // 查询该分类下的总数
-        Long total = collectionMapper.selectCount(new QueryWrapper<Collection>()
-                .eq("category", category.trim()));
+        Long total = collectionMapper.selectCount(categoryQuery(normalized));
 
         // 追加分页子句并执行查询
         qw.last("LIMIT " + limit + " OFFSET " + offset);
@@ -80,6 +93,7 @@ public class CollectionService {
     public Map<String, List<Collection>> all() {
         // 查询全部基础资料，按分类和值排序
         List<Collection> list = collectionMapper.selectList(new QueryWrapper<Collection>().orderByAsc("category", "value"));
+        list.forEach(item -> item.setCategory(normalizedCategory(item.getCategory())));
         // 按 category 字段分组返回
         return list.stream().collect(Collectors.groupingBy(Collection::getCategory, LinkedHashMap::new, Collectors.toList()));
     }
@@ -92,7 +106,7 @@ public class CollectionService {
      */
     public int create(Map<String, Object> body) {
         // 提取并去空格
-        String category = DbSupport.trim(body.get("category"));
+        String category = normalizedCategory(DbSupport.trim(body.get("category")));
         String value = DbSupport.trim(body.get("value"));
         // 必填校验
         if (category.isBlank() || value.isBlank()) {
@@ -103,7 +117,7 @@ public class CollectionService {
             throw new BusinessException("value 长度不能超过 64 个字符", HttpStatus.UNPROCESSABLE_ENTITY);
         }
         // 检查同分类下是否已存在相同值（防重复）
-        if (collectionMapper.countByCategoryAndValue(category, value) > 0) {
+        if (collectionMapper.selectCount(categoryQuery(category).eq("value", value)) > 0) {
             throw new BusinessException("该分类下已存在相同的值", HttpStatus.CONFLICT);
         }
         // 构建实体并插入

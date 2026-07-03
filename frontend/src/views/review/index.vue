@@ -10,7 +10,7 @@ import {
   reviewRecord,
   deleteRecord,
   deleteImage,
-  fetchRates,
+  fetchAllRates,
   lookupRate,
   updateImage,
   reocrImage
@@ -126,7 +126,7 @@ function getOptions(field: Field) {
 async function loadCollections() {
   try {
     await loadCollectionsBase();
-    const rateData = await fetchRates();
+    const rateData = await fetchAllRates();
     allRates.value = rateData.items || rateData.rates || [];
     updateRouteReceivers();
     updateRouteSenders();
@@ -172,7 +172,7 @@ function onFieldChange(key: string) {
       form.sender = '';
     }
   }
-  if (['company', 'receiver', 'record_date', 'net_weight', 'detour_surcharge'].includes(key)) {
+  if (['company', 'sender', 'receiver', 'record_date', 'net_weight', 'detour_surcharge'].includes(key)) {
     lookupRateForForm();
   }
 }
@@ -233,11 +233,12 @@ function syncForm(row: TransportRecord) {
 
 async function lookupRateForForm() {
   const company = String(form.company || '').trim();
+  const sender = String(form.sender || '').trim();
   const receiver = String(form.receiver || '').trim();
   const date = form.record_date ? new Date(String(form.record_date)).toISOString().split('T')[0] : '';
   if (!company || !receiver || !date) return;
   try {
-    const data = await lookupRate({ origin: company, destination: receiver, date });
+    const data = await lookupRate({ origin: company, sender, destination: receiver, date });
     if (!data.found || !data.rate) {
       form.freight_rate = null;
       form.total_cost = null;

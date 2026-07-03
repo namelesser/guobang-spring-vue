@@ -19,6 +19,9 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+*.pid
+.pids/
 
 # Env
 .env
@@ -36,3 +39,4 @@ docker-compose.override.yml
 
 # Test
 backend/target/
+__pycache__/

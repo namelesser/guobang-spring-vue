@@ -21,6 +21,7 @@ import time
 import sys
 import os
 import re
+from datetime import datetime
 
 PROJECT_ROOT = os.path.expanduser("~/.hermes/scripts/guobang-spring-vue")
 BACKEND_PORT = 8000
@@ -28,6 +29,11 @@ FRONTEND_PORT = 9527
 PG_PORT = 5432
 MAX_RECOVERY_WAIT = 20  # seconds
 CREDS_SCRIPT = os.path.expanduser("~/.hermes/scripts/creds/creds.sh")
+
+
+def format_cron_message(title: str, body: str) -> str:
+    ts = datetime.now().strftime("%m-%d %H:%M")
+    return f"🔔 {title}｜{ts}\n\n{body.strip()}\n\n— 自动推送"
 
 
 def port_open(port: int) -> bool:
@@ -173,7 +179,7 @@ def main():
             messages.append("✅ PostgreSQL 已恢复")
         else:
             messages.append("❌ PostgreSQL 恢复失败！")
-            print("\n".join(messages))
+            print(format_cron_message("过磅服务监控", "\n".join(messages)))
             return
 
     # 2. Backend
@@ -193,7 +199,7 @@ def main():
             messages.append("❌ 前端恢复失败！检查 /tmp/guobang-frontend.log")
 
     if messages:
-        print("\n".join(messages))
+        print(format_cron_message("过磅服务监控", "\n".join(messages)))
     # 无输出 = 一切正常
 
 
