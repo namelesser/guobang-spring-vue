@@ -4,13 +4,16 @@ server:
     session:
       tracking-modes: cookie
 
+TRANSPORT_AUTH_SECRET: guobang-secret-key-2024
+TRANSPORT_AUTH_PASSWORD: 552300
+
 spring:
   application:
     name: guobang-transport
   datasource:
     url: jdbc:postgresql://${PG_HOST:127.0.0.1}:${PG_PORT:5432}/${PG_DATABASE:transport}?sslmode=disable
     username: ${PG_USER:transport}
-    password: ${PG_PASSWORD:}
+    password: 552300
     hikari:
       maximum-pool-size: ${PG_POOL_MAX:30}
       minimum-idle: 2
@@ -52,10 +55,10 @@ mybatis-plus:
 ocr:
   paddle:
     api-url: ${PADDLE_API_URL:https://paddleocr.aistudio-app.com/api/v2/ocr/jobs}
-    api-token: ${PADDLE_API_TOKEN:}
+    api-token: ${PADDLE_API_TOKEN:bc6790406689e86a2543cc14cf6bfc6b98fbe431}
     model: ${PADDLE_MODEL:PaddleOCR-VL-1.6}
     timeout-sec: ${PADDLE_TIMEOUT_SEC:900}
     poll-interval-sec: ${PADDLE_POLL_INTERVAL_SEC:4}
   baidu:
-    api-key: ${BAIDU_API_KEY:}
-    secret-key: ${BAIDU_SECRET_KEY:}
+    api-key: ${BAIDU_API_KEY:H6qngavUdbaeHxOlAtSZGPN0}
+    secret-key: ${BAIDU_SECRET_KEY:tdGtA5Pkt4A3hntrla0orV7Wog1PMDHN}
