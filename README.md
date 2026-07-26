@@ -23,20 +23,20 @@ Spring Boot 3 + Vue 3 + PostgreSQL 运输管理系统
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-前端启动后访问: http://localhost:5173
+前端启动后访问: http://localhost:9527
 
 ### 4. 登录
 
-访问 http://localhost:5173/login，输入密码: `552300`
+访问 http://localhost:9527/login，输入密码: `552300`
 
 ## 技术栈
 
 - **后端**: Spring Boot 3.3.6, Java 17+, PostgreSQL, AWS S3 (JD Cloud OSS)
-- **前端**: Vue 3.5, Naive UI 2.40, Vite 6.4, TypeScript
+- **前端**: Vue 3.5, Naive UI 2.44, Vite 8, TypeScript
 
 ## 项目结构
 

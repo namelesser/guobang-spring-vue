@@ -39,6 +39,16 @@ public class RateController {
     }
 
     /**
+     * 获取全部运价，用于核对页路线校验和下拉选项。
+     *
+     * @return 全部运价列表
+     */
+    @GetMapping("/all")
+    public Map<String, Object> all() {
+        return Api.ok("items", service.all());
+    }
+
+    /**
      * 创建运价
      *
      * @param body 运价数据
@@ -90,9 +100,12 @@ public class RateController {
      * @return 运价查询结果
      */
     @GetMapping("/lookup")
-    public Map<String, Object> lookup(@RequestParam String origin, @RequestParam String destination, @RequestParam String date) {
+    public Map<String, Object> lookup(@RequestParam String origin,
+                                      @RequestParam(required = false, defaultValue = "") String sender,
+                                      @RequestParam String destination,
+                                      @RequestParam String date) {
         // 调用服务层按线路和日期查询运价
-        Map<String, Object> rate = service.lookup(origin, destination, date);
+        Map<String, Object> rate = service.lookup(origin, sender, destination, date);
         // 组装返回结果，标记是否找到匹配运价
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("found", rate != null);

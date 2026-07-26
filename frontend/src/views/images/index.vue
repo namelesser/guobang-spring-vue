@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import { useMessage, NButton, NPopconfirm, NTag, NTooltip } from 'naive-ui';
+import { useMessage, NButton, NSpace, NPopconfirm, NTag, NTooltip } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { fetchImages, fetchImage, updateImage, reocrImage, rereviewImage, deleteImage } from '@/service/api/business';
+import { fetchImages, fetchImage, deleteImage, updateImage, reocrImage, rereviewImage } from '@/service/api/business';
+import type { ImageAsset } from '@/service/api/types';
 import { useImageEditor } from '@/hooks/business/image-editor';
+import { monthOptions as getMonthOptions, downloadExport } from '@/utils/business';
+import { useRouter } from 'vue-router';
 
 defineOptions({ name: 'Images' });
 
@@ -12,48 +14,34 @@ const PAGE_SIZE = 20;
 const router = useRouter();
 const message = useMessage();
 const loading = ref(false);
-const rows = ref<any[]>([]);
 const total = ref(0);
 const page = ref(1);
-const editorImg = ref<any>(null);
-
-const filters = reactive({ month: '', ocrStatus: '', fileName: '', orderNo: '' });
 let searchTimer: number | null = null;
 let abortController: AbortController | null = null;
-let editorBase = '';
-
-const {
-  editorOpen,
-  canvasEl,
-  openEditor: openEditorRaw,
-  startDrag,
-  onDrag,
-  endDrag,
-  applyCrop,
-  rotate,
-  resetEditor: resetEditorRaw,
-  saveImage: saveImageRaw
-} = useImageEditor({
-  onSave: async base64 => {
-    await updateImage(editorImg.value.id, { image_base64: base64 });
-    message.success('图片已保存');
-    search();
-  },
-  getInitialBase64: () => editorBase
+const rows = ref<ImageAsset[]>([]);
+const filters = reactive({
+  month: '',
+  plate: '',
+  status: '' as string,
+  orderNo: ''
 });
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 
-const monthOptions = computed(() => {
-  const months = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    months.push({ label: value, value });
-  }
-  return months;
+// 表格高度自适应窗口
+const tableMaxHeight = ref(500);
+function updateTableHeight() {
+  tableMaxHeight.value = Math.max(300, window.innerHeight - 260);
+}
+onMounted(() => {
+  updateTableHeight();
+  window.addEventListener('resize', updateTableHeight);
 });
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTableHeight);
+});
+
+const monthOptions = getMonthOptions();
 
 const statusOptions = [
   { label: '待扫描', value: 'pending' },
@@ -70,7 +58,7 @@ const statusLabel: Record<string, string> = {
   duplicate: '重复',
   error: '错误'
 };
-const statusType: Record<string, any> = {
+const statusType: Record<string, 'primary' | 'info' | 'success' | 'warning' | 'error' | 'default'> = {
   pending: 'warning',
   processing: 'info',
   done: 'success',
@@ -78,7 +66,30 @@ const statusType: Record<string, any> = {
   error: 'error'
 };
 
-const columns: DataTableColumns<any> = [
+const editorImg = ref<ImageAsset | null>(null);
+let editorBase = '';
+
+const {
+  editorOpen,
+  canvasEl,
+  openEditor: openEditorRaw,
+  startDrag,
+  onDrag,
+  endDrag,
+  applyCrop,
+  rotate,
+  resetEditor: resetEditorRaw,
+  saveImage: saveImageRaw
+} = useImageEditor({
+  onSave: async (base64: string) => {
+    if (!editorImg.value) return;
+    await updateImage(editorImg.value.id, { image_base64: base64 });
+    message.success('图片已保存');
+    search();
+  }
+});
+
+const columns: DataTableColumns<ImageAsset> = [
   {
     title: '缩略图',
     key: 'thumb',
@@ -90,7 +101,7 @@ const columns: DataTableColumns<any> = [
             style: 'max-width:82px;max-height:62px;border-radius:6px;cursor:pointer',
             onClick: () => openEditor(row)
           })
-        : '无'
+        : h('span', { style: 'color:#94a3b8;font-size:12px' }, '无')
   },
   { title: 'ID', key: 'id', width: 70 },
   { title: '文件名', key: 'file_name', minWidth: 220 },
@@ -108,8 +119,8 @@ const columns: DataTableColumns<any> = [
     render: row =>
       h(
         NTag,
-        { size: 'small', type: statusType[row.ocr_status] || 'default' },
-        () => statusLabel[row.ocr_status] || row.ocr_status || '-'
+        { size: 'small', type: statusType[row.ocr_status || ''] || 'default' },
+        () => statusLabel[row.ocr_status || ''] || row.ocr_status || '-'
       )
   },
   {
@@ -162,8 +173,8 @@ const columns: DataTableColumns<any> = [
 function buildParams(includePaging = true) {
   const params: Record<string, string> = {};
   if (filters.month) params.month = filters.month;
-  if (filters.ocrStatus) params.ocr_status = filters.ocrStatus;
-  if (filters.fileName) params.file_name = filters.fileName;
+  if (filters.status) params.ocr_status = filters.status;
+  if (filters.plate) params.plate_no = filters.plate;
   if (filters.orderNo) params.order_no = filters.orderNo;
   if (includePaging) {
     params.limit = String(PAGE_SIZE);
@@ -182,8 +193,9 @@ async function search() {
     const data = await fetchImages(buildParams(), abortController.signal);
     rows.value = data.images || [];
     total.value = data.total || 0;
-  } catch (error: any) {
-    if (error.name !== 'AbortError') message.error(error?.message || '查询失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.name !== 'AbortError') message.error(err?.message || '查询失败');
   } finally {
     loading.value = false;
   }
@@ -201,7 +213,7 @@ function goPage(nextPage: number) {
 }
 
 function resetFilters() {
-  Object.assign(filters, { month: '', ocrStatus: '', fileName: '', orderNo: '' });
+  Object.assign(filters, { month: '', plate: '', status: '', orderNo: '' });
 }
 
 async function exportImages(format: 'zip' | 'xls' | 'csv') {
@@ -209,21 +221,15 @@ async function exportImages(format: 'zip' | 'xls' | 'csv') {
   params.format = format;
   try {
     const url = '/api/images/export?' + new URLSearchParams(params).toString();
-    const response = await fetch(url, { credentials: 'include' });
-    const blob = await response.blob();
-    const a = document.createElement('a');
-    const objectUrl = URL.createObjectURL(blob);
-    a.href = objectUrl;
-    a.download = `images.${format}`;
-    a.click();
-    URL.revokeObjectURL(objectUrl);
+    await downloadExport(url, `images.${format}`);
     message.success('导出已开始');
-  } catch (error: any) {
-    message.error(error?.message || '导出失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    message.error(err?.message || '导出失败');
   }
 }
 
-async function openEditor(row: any) {
+async function openEditor(row: ImageAsset) {
   const data = await fetchImage(row.id);
   editorImg.value = row;
   editorBase = data.image_base64 || '';
@@ -269,13 +275,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="图片资产" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
-          <NButton @click="exportImages('zip')">导出图片</NButton>
-          <NButton @click="exportImages('xls')">导出 XLS</NButton>
-          <NButton @click="exportImages('csv')">导出 CSV</NButton>
+        <NSpace wrap>
+          <NButton secondary @click="exportImages('zip')">导出图片</NButton>
+          <NButton secondary @click="exportImages('xls')">导出 XLS</NButton>
+          <NButton secondary @click="exportImages('csv')">导出 CSV</NButton>
         </NSpace>
       </template>
 
@@ -294,15 +300,15 @@ onBeforeUnmount(() => {
             </NFormItem>
             <NFormItem label="OCR">
               <NSelect
-                v-model:value="filters.ocrStatus"
+                v-model:value="filters.status"
                 clearable
                 placeholder="OCR 状态"
                 :options="statusOptions"
                 style="width: 140px"
               />
             </NFormItem>
-            <NFormItem label="文件">
-              <NInput v-model:value="filters.fileName" clearable placeholder="文件名" style="width: 160px" />
+            <NFormItem label="车牌">
+              <NInput v-model:value="filters.plate" clearable placeholder="车牌号" style="width: 160px" />
             </NFormItem>
             <NFormItem label="单号">
               <NInput v-model:value="filters.orderNo" clearable placeholder="单号" style="width: 140px" />
@@ -316,8 +322,9 @@ onBeforeUnmount(() => {
         :columns="columns"
         :data="rows"
         :loading="loading"
-        :row-key="(row: any) => row.id"
-        :max-height="600"
+        :row-key="(row: ImageAsset) => row.id"
+        :max-height="tableMaxHeight"
+        :scroll-x="1320"
         remote
         striped
       />
@@ -328,7 +335,13 @@ onBeforeUnmount(() => {
     </NCard>
 
     <!-- 图片编辑器弹窗 -->
-    <NModal v-model:show="editorOpen" preset="card" title="图片查看与编辑" style="width: 95vw; height: 92vh">
+    <NModal
+      v-if="editorOpen"
+      v-model:show="editorOpen"
+      preset="card"
+      title="图片查看与编辑"
+      style="width: 95vw; height: 92vh"
+    >
       <template #header-extra>
         <NSpace align="center">
           <NButton size="small" @click="rotate(-90)">左转</NButton>

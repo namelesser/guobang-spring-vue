@@ -167,8 +167,9 @@ export function useImageEditor(options: UseImageEditorOptions) {
     try {
       await options.onSave(editorBase);
       editorOpen.value = false;
-    } catch (error: any) {
-      message.error(error?.message || '保存失败');
+    } catch (error: unknown) {
+      const err = error as Error;
+      message.error(err?.message || '保存失败');
     }
   }
 

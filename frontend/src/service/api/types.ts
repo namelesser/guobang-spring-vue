@@ -114,20 +114,45 @@ export interface RereviewResponse {
 export interface ReportParams {
   month?: string;
   company?: string;
+  sender?: string;
+  receiver?: string;
+  plate_no?: string;
 }
 
-export interface ReportRow {
-  company: string;
-  total_trips: number;
+export interface ReportPeriod {
+  start: string;
+  end: string;
+}
+
+export interface ReportGrandTotal {
+  trips: number;
+  total_weight: number;
+  total_freight: number;
+}
+
+export interface ReportGroup {
+  company: string | null;
+  sender: string | null;
+  receiver: string | null;
+  plate_no: string | null;
+  trips: number;
+  total_weight: number;
+  total_freight: number;
+  avg_rate: number | null;
+}
+
+export interface TopConsigneeRow {
+  receiver: string | null;
+  trips: number;
   total_weight: number;
   total_freight: number;
 }
 
 export interface ReportResponse {
-  records: ReportRow[];
-  total_trips: number;
-  total_weight: number;
-  total_freight: number;
+  period: ReportPeriod;
+  grand_total: ReportGrandTotal;
+  groups: ReportGroup[];
+  top5_consignee: TopConsigneeRow[];
 }
 
 export interface DataQualityCheck {
@@ -136,29 +161,54 @@ export interface DataQualityCheck {
   count: number;
 }
 
+export interface DataQualityCollectionItem {
+  value: string;
+  cnt: number;
+}
+
+export interface DataQualityCollectionCheck {
+  field: string;
+  label: string;
+  items: DataQualityCollectionItem[];
+}
+
+export interface DataQualityStaleOcrTask {
+  record_id: number;
+  image_id: number;
+  file_name: string | null;
+  retry_count: number;
+  started_at: string | null;
+}
+
+export interface DataQualityDuplicateOrder {
+  order_no: string | null;
+  dup_count: number;
+  first_id: number | null;
+}
+
+export interface DataQualitySenderCompanyMismatch {
+  record_id: number;
+  record_date: string | null;
+  order_no: string | null;
+  company: string | null;
+  collection_value: string | null;
+}
+
+export interface DataQualityReport {
+  future_dates: TransportRecord[];
+  missing_images: TransportRecord[];
+  missing_weights: TransportRecord[];
+  missing_rates: TransportRecord[];
+  stale_ocr_tasks: DataQualityStaleOcrTask[];
+  duplicate_orders: DataQualityDuplicateOrder[];
+  sender_company_mismatch: DataQualitySenderCompanyMismatch[];
+  receiver_not_in_collection: TransportRecord[];
+  plate_no_not_in_collection: TransportRecord[];
+  collection_checks: DataQualityCollectionCheck[];
+}
+
 export interface DataQualityResponse {
-  future_dates: any[];
-  missing_images: any[];
-  missing_weights: any[];
-  missing_rates: any[];
-  stale_ocr_tasks: any[];
-  duplicate_orders: any[];
-  sender_company_mismatch: any[];
-  receiver_not_in_collection: any[];
-  plate_no_not_in_collection: any[];
-  collection_checks: { field: string; label: string; items: any[] }[];
-  report?: {
-    future_dates: any[];
-    missing_images: any[];
-    missing_weights: any[];
-    missing_rates: any[];
-    stale_ocr_tasks: any[];
-    duplicate_orders: any[];
-    sender_company_mismatch: any[];
-    receiver_not_in_collection: any[];
-    plate_no_not_in_collection: any[];
-    collection_checks: { field: string; label: string; items: any[] }[];
-  };
+  report: DataQualityReport;
 }
 
 export interface RecordCreateData {
@@ -186,7 +236,22 @@ export interface OcrScanResponse {
   id: number;
   record_id: number;
   image_id: number;
+  task_id: number;
   status: string;
+}
+
+export interface OcrStatusResponse {
+  status: string;
+  ocr_status: string;
+  task?: {
+    error_message?: string;
+  };
+}
+
+export interface OcrSummaryResponse {
+  remaining_quota: string | null;
+  total_tasks: number;
+  by_status: Record<string, number>;
 }
 
 export interface RateCreateData {

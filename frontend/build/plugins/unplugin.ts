@@ -1,7 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
 import type { PluginOption } from 'vite';
-import { createSvgIconsPlugin } from 'vite-plugin-svg-icons';
 import Icons from 'unplugin-icons/vite';
 import IconsResolver from 'unplugin-icons/resolver';
 import Components from 'unplugin-vue-components/vite';
@@ -34,12 +33,6 @@ export function setupUnplugin(viteEnv: Env.ImportMeta) {
         NaiveUiResolver(),
         IconsResolver({ customCollections: [collectionName], componentPrefix: VITE_ICON_PREFIX })
       ]
-    }),
-    createSvgIconsPlugin({
-      iconDirs: [localIconPath],
-      symbolId: `${VITE_ICON_LOCAL_PREFIX}-[dir]-[name]`,
-      inject: 'body-last',
-      customDomId: '__SVG_ICON_LOCAL__'
     })
   ];
 

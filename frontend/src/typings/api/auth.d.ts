@@ -5,9 +5,9 @@ declare namespace Api {
    * backend api module: "auth"
    */
   namespace Auth {
-    interface LoginToken {
-      token: string;
-      refreshToken: string;
+    interface LoginResponse {
+      authenticated?: boolean;
+      session_seconds?: number;
     }
 
     interface UserInfo {

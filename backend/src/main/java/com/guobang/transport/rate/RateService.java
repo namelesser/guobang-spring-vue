@@ -172,6 +172,19 @@ public class RateService {
      * @return 运价信息
      */
     public Map<String, Object> lookup(String origin, String destination, String onDate) {
+        return lookup(origin, "", destination, onDate);
+    }
+
+    /**
+     * 查询指定线路、发货单位和日期的运价。
+     *
+     * @param origin      发货地
+     * @param sender      发货单位
+     * @param destination 目的地
+     * @param onDate      日期
+     * @return 运价信息
+     */
+    public Map<String, Object> lookup(String origin, String sender, String destination, String onDate) {
         // 任一参数为空则直接返回 null
         if (DbSupport.trim(origin).isBlank() || DbSupport.trim(destination).isBlank() || DbSupport.trim(onDate).isBlank()) {
             return null;
@@ -179,7 +192,7 @@ public class RateService {
         // 解析日期字符串，截取前 10 位（yyyy-MM-dd）
         LocalDate date = LocalDate.parse(onDate.substring(0, 10));
         // 调用自定义 SQL 查询匹配的运价（同一发货地/目的地可能有多条记录）
-        Map<String, Object> row = rateMapper.lookup(origin, origin, destination, destination, date, date);
+        Map<String, Object> row = rateMapper.lookup(origin, origin, DbSupport.trim(sender), destination, destination, date, date);
         // 对结果行做标准化处理（如数值精度统一）
         return row == null ? null : DbSupport.normalizeRow(row);
     }

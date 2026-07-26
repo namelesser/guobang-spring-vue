@@ -69,8 +69,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-700)" />
-          <stop offset="1" stop-color="var(--logo-color-600)" />
+          <stop offset="0" stop-color="#3451b2" />
+          <stop offset="1" stop-color="#4f6cf0" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_2"
@@ -81,8 +81,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-300)" />
-          <stop offset="1" stop-color="var(--logo-color-500)" />
+          <stop offset="0" stop-color="#94a8ff" />
+          <stop offset="1" stop-color="#5d7cff" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_3"
@@ -93,8 +93,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-600)" />
-          <stop offset="1" stop-color="var(--logo-color-700)" />
+          <stop offset="0" stop-color="#4f6cf0" />
+          <stop offset="1" stop-color="#3451b2" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_4"
@@ -105,8 +105,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-400)" />
-          <stop offset="1" stop-color="var(--logo-color-600)" />
+          <stop offset="0" stop-color="#7f97ff" />
+          <stop offset="1" stop-color="#4f6cf0" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_5"
@@ -117,8 +117,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-500)" />
-          <stop offset="1" stop-color="var(--logo-color-300)" />
+          <stop offset="0" stop-color="#5d7cff" />
+          <stop offset="1" stop-color="#94a8ff" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_6"
@@ -129,8 +129,8 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-300)" />
-          <stop offset="1" stop-color="var(--logo-color-500)" />
+          <stop offset="0" stop-color="#94a8ff" />
+          <stop offset="1" stop-color="#5d7cff" />
         </linearGradient>
         <linearGradient
           id="LinearGradient_7"
@@ -141,20 +141,10 @@
           y1="0"
           y2="0"
         >
-          <stop offset="0" stop-color="var(--logo-color-700)" />
-          <stop offset="1" stop-color="var(--logo-color-600)" />
+          <stop offset="0" stop-color="#3451b2" />
+          <stop offset="1" stop-color="#4f6cf0" />
         </linearGradient>
       </defs>
     </svg>
   </div>
 </template>
-
-<style scoped>
-.app-logo {
-  --logo-color-300: rgb(var(--primary-300-color));
-  --logo-color-400: rgb(var(--primary-400-color));
-  --logo-color-500: rgb(var(--primary-500-color));
-  --logo-color-600: rgb(var(--primary-600-color));
-  --logo-color-700: rgb(var(--primary-700-color));
-}
-</style>

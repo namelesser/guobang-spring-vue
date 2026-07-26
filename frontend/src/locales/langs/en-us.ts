@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'SoybeanAdmin',
+    title: 'Guobang Transport',
     updateTitle: 'System Version Update Notification',
     updateContent: 'A new version of the system has been detected. Do you want to refresh the page immediately?',
     updateConfirm: 'Refresh immediately',
@@ -218,7 +218,7 @@ const local: App.I18n.Schema = {
     },
     configOperation: {
       copyConfig: 'Copy Config',
-      copySuccessMsg: 'Copy Success, Please replace the variable "themeSettings" in "src/theme/settings.ts"',
+      copySuccessMsg: 'Copy Success',
       resetConfig: 'Reset Config',
       resetSuccessMsg: 'Reset Success'
     }
@@ -307,11 +307,11 @@ const local: App.I18n.Schema = {
       projectNews: {
         title: 'Project News',
         moreNews: 'More News',
-        desc1: 'Soybean created the open source project soybean-admin on May 28, 2021!',
-        desc2: 'Yanbowe submitted a bug to soybean-admin, the multi-tab bar will not adapt.',
-        desc3: 'Soybean is ready to do sufficient preparation for the release of soybean-admin!',
-        desc4: 'Soybean is busy writing project documentation for soybean-admin!',
-        desc5: 'Soybean just wrote some of the workbench pages casually, and it was enough to see!'
+        desc1: 'Transport records and images are managed in one workflow.',
+        desc2: 'OCR results flow into manual review.',
+        desc3: 'Rates, master data and reports stay in sync.',
+        desc4: 'Data anomalies surface in the quality checks list.',
+        desc5: 'The home page keeps only business-facing summary content.'
       },
       creativity: 'Creativity'
     }

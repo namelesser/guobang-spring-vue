@@ -22,7 +22,9 @@ import type {
   ReportParams,
   ReportResponse,
   DataQualityResponse,
-  OcrScanResponse
+  OcrScanResponse,
+  OcrStatusResponse,
+  OcrSummaryResponse
 } from './types';
 
 export async function fetchRecords(params: RecordFilters, signal?: AbortSignal): Promise<RecordsResponse> {
@@ -104,14 +106,6 @@ export async function fetchImage(id: number): Promise<ImageDetailResponse> {
   return data;
 }
 
-export async function fetchImageThumbnail(id: number): Promise<{ thumbnail_base64: string }> {
-  const { data } = await request({
-    url: `/api/images/${id}/thumbnail`,
-    method: 'get'
-  });
-  return data;
-}
-
 export async function deleteImage(id: number): Promise<void> {
   const { data } = await request({
     url: `/api/images/${id}`,
@@ -130,11 +124,19 @@ export async function ocrScan(formData: FormData): Promise<OcrScanResponse> {
   return data;
 }
 
-export async function fetchOcrStatus(recordId: number): Promise<any> {
+export async function fetchOcrStatus(recordId: number): Promise<OcrStatusResponse> {
   const { data } = await request({
     url: '/api/ocr/status',
     method: 'get',
     params: { record_id: recordId }
+  });
+  return data;
+}
+
+export async function fetchOcrSummary(): Promise<OcrSummaryResponse> {
+  const { data } = await request({
+    url: '/api/admin/ocr/summary',
+    method: 'get'
   });
   return data;
 }
@@ -144,6 +146,14 @@ export async function fetchRates(params?: Record<string, string | number>): Prom
     url: '/api/rates',
     method: 'get',
     params: params || {}
+  });
+  return data;
+}
+
+export async function fetchAllRates(): Promise<RatesResponse> {
+  const { data } = await request({
+    url: '/api/rates/all',
+    method: 'get'
   });
   return data;
 }
@@ -220,15 +230,6 @@ export async function fetchDataQuality(): Promise<DataQualityResponse> {
   return data;
 }
 
-export async function fetchDataQualityDetail(checkId: string, params?: Record<string, string | number>): Promise<any> {
-  const { data } = await request({
-    url: '/api/data-quality/detail',
-    method: 'get',
-    params: { checkId, ...params }
-  });
-  return data;
-}
-
 export async function updateImage(id: number, imageData: ImageUpdateData): Promise<void> {
   const { data } = await request({
     url: `/api/images/${id}`,
@@ -256,6 +257,7 @@ export async function rereviewImage(id: number): Promise<RereviewResponse> {
 
 export async function lookupRate(params: {
   origin: string;
+  sender?: string;
   destination: string;
   date?: string;
 }): Promise<RateLookupResponse> {

@@ -2,7 +2,7 @@
 declare namespace App {
   /** Theme namespace */
   namespace Theme {
-    type ColorPaletteNumber = import('@sa/color').ColorPaletteNumber;
+    type ColorPaletteNumber = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950;
 
     /** NaiveUI theme overrides that can be specified in preset */
     type NaiveUIThemeOverride = import('naive-ui').GlobalThemeOverrides;
@@ -155,8 +155,6 @@ declare namespace App {
     type BaseToken = Record<string, Record<string, string>>;
 
     interface ThemeSettingTokenColor {
-      /** the progress bar color, if not set, will use the primary color */
-      nprogress?: string;
       container: string;
       layout: string;
       inverted: string;
@@ -187,10 +185,10 @@ declare namespace App {
   namespace Global {
     type VNode = import('vue').VNode;
     type RouteLocationNormalizedLoaded = import('vue-router').RouteLocationNormalizedLoaded;
-    type RouteKey = import('@elegant-router/types').RouteKey;
-    type RouteMap = import('@elegant-router/types').RouteMap;
-    type RoutePath = import('@elegant-router/types').RoutePath;
-    type LastLevelRouteKey = import('@elegant-router/types').LastLevelRouteKey;
+    type RouteKey = import('@/router/route-map').RouteKey;
+    type RouteMap = typeof import('@/router/route-map').routeMap;
+    type RoutePath = import('@/router/route-map').RoutePath;
+    type LastLevelRouteKey = import('@/router/route-map').LastLevelRouteKey;
 
     /** The router push options */
     type RouterPushOptions = {
@@ -294,7 +292,7 @@ declare namespace App {
    * Locales type
    */
   namespace I18n {
-    type RouteKey = import('@elegant-router/types').RouteKey;
+    type RouteKey = import('@/router/route-map').RouteKey;
 
     type LangType = 'en-US' | 'zh-CN';
 

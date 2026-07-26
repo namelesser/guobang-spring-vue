@@ -34,6 +34,7 @@ export default defineConfig(configEnv => {
     server: {
       host: '0.0.0.0',
       port: 9527,
+      allowedHosts: ['transport.liumangtu.site'],
       open: true,
       proxy: createViteProxy(viteEnv, enableProxy)
     },
@@ -45,6 +46,21 @@ export default defineConfig(configEnv => {
       sourcemap: viteEnv.VITE_SOURCE_MAP === 'Y',
       commonjsOptions: {
         ignoreTryCatch: false
+      },
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('naive-ui')) {
+              return 'naive-ui';
+            }
+            if (id.includes('echarts')) {
+              return 'echarts';
+            }
+            if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia')) {
+              return 'vue-vendor';
+            }
+          }
+        }
       }
     }
   };

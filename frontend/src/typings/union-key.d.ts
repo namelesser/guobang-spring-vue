@@ -4,12 +4,8 @@ declare namespace UnionKey {
    * The login module
    *
    * - pwd-login: password login
-   * - code-login: phone code login
-   * - register: register
-   * - reset-pwd: reset password
-   * - bind-wechat: bind wechat
    */
-  type LoginModule = 'pwd-login' | 'code-login' | 'register' | 'reset-pwd' | 'bind-wechat';
+  type LoginModule = 'pwd-login';
 
   /** Theme scheme */
   type ThemeScheme = 'light' | 'dark' | 'auto';
@@ -37,7 +33,7 @@ declare namespace UnionKey {
    * - wrapper: the wrapper component's root element overflow
    * - content: the content component overflow
    */
-  type ThemeScrollMode = import('@sa/materials').LayoutScrollMode;
+  type ThemeScrollMode = 'wrapper' | 'content';
 
   /** Page animate mode */
   type ThemePageAnimateMode = 'fade' | 'fade-slide' | 'fade-bottom' | 'fade-scale' | 'zoom-fade' | 'zoom-out' | 'none';
@@ -48,7 +44,7 @@ declare namespace UnionKey {
    * - chrome: chrome style
    * - button: button style
    */
-  type ThemeTabMode = import('@sa/materials').PageTabMode;
+  type ThemeTabMode = 'chrome' | 'button' | 'slider';
 
   /** Unocss animate key */
   type UnoCssAnimateKey =

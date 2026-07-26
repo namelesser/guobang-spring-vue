@@ -19,6 +19,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthService {
     private final Environment environment;
+    private final AuthSettingsStore settingsStore;
 
     /**
      * 获取 Cookie 名称
@@ -55,7 +56,7 @@ public class AuthService {
      */
     public String setupError() {
         if (!StringUtils.hasText(password())) { // 检查登录密码是否已配置
-            return "系统未配置 TRANSPORT_AUTH_PASSWORD，已拒绝访问";
+            return "系统未配置登录密码数据，已拒绝访问";
         }
         if (!StringUtils.hasText(secret())) { // 检查签名密钥是否已配置
             return "系统未配置 TRANSPORT_AUTH_SECRET，已拒绝访问";
@@ -133,7 +134,7 @@ public class AuthService {
     }
 
     private String password() {
-        return env("TRANSPORT_AUTH_PASSWORD", ""); // 读取登录密码配置
+        return settingsStore.getAuthPassword().orElse(""); // 读取数据库中的登录密码配置
     }
 
     private String secret() {

@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue';
 import { useMessage } from 'naive-ui';
 import { ocrScan, fetchOcrStatus } from '@/service/api/business';
+import type { OcrStatusResponse } from '@/service/api/types';
 
 defineOptions({ name: 'Ocr' });
 
@@ -14,6 +15,14 @@ const logs = ref<string[]>([]);
 const trackRecords = ref<{ record_id: number; file_name: string }[]>([]);
 const folderInput = ref<HTMLInputElement | null>(null);
 let timer: number | null = null;
+
+type UploadFileLike = {
+  file?: File | null;
+};
+
+type UploadChangePayload = {
+  fileList: UploadFileLike[];
+};
 
 const statusLabel: Record<string, string> = {
   pending: '待扫描',
@@ -35,8 +44,8 @@ function addFiles(list: File[]) {
   }
 }
 
-function onUploadChange({ fileList }: any) {
-  addFiles(fileList.map((item: any) => item.file).filter(Boolean));
+function onUploadChange({ fileList }: UploadChangePayload) {
+  addFiles(fileList.map(item => item.file).filter((file): file is File => file instanceof File));
 }
 
 function onFolderChange(event: Event) {
@@ -77,8 +86,9 @@ async function startOCR() {
       logs.value.unshift(
         `${file.name} 已入库：记录 ${data.id || data.record_id}，图片 ${data.image_id}，状态 ${statusLabel[data.status] || data.status}`
       );
-    } catch (error: any) {
-      logs.value.unshift(`${file.name} 上传失败：${error?.message || '未知错误'}`);
+    } catch (error: unknown) {
+      const err = error as Error;
+      logs.value.unshift(`${file.name} 上传失败：${err?.message || '未知错误'}`);
     } finally {
       done.value += 1;
     }
@@ -94,10 +104,10 @@ function startPoll() {
   stopPoll();
   if (!trackRecords.value.length) return;
   timer = window.setInterval(async () => {
-    const remain = [];
+    const remain: { record_id: number; file_name: string }[] = [];
     for (const item of trackRecords.value) {
       try {
-        const data = await fetchOcrStatus(item.record_id);
+        const data: OcrStatusResponse = await fetchOcrStatus(item.record_id);
         const status = data.ocr_status || '';
         if (status === 'pending' || status === 'processing') {
           remain.push(item);
@@ -118,10 +128,10 @@ onBeforeUnmount(stopPoll);
 </script>
 
 <template>
-  <div class="flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
+  <div class="flex-col-stretch gap-16px overflow-auto">
     <NCard title="OCR 扫描" :bordered="false" size="small">
       <template #header-extra>
-        <NSpace>
+        <NSpace wrap>
           <NButton @click="clear">清空</NButton>
           <NButton type="primary" :disabled="!files.length || running" :loading="running" @click="startOCR">
             开始扫描
@@ -137,7 +147,7 @@ onBeforeUnmount(stopPoll);
         </NUploadDragger>
       </NUpload>
 
-      <NSpace style="margin-top: 12px">
+      <NSpace wrap style="margin-top: 12px">
         <NButton @click="folderInput?.click()">选择文件夹</NButton>
         <NTag type="info">待上传 {{ files.length }} 张</NTag>
       </NSpace>

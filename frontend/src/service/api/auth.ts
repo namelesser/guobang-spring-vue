@@ -1,7 +1,7 @@
 import { request } from '../request';
 
 export function fetchLogin(password: string) {
-  return request<Api.Auth.LoginToken>({
+  return request<Api.Auth.LoginResponse>({
     url: '/api/auth/login',
     method: 'post',
     data: { password },
@@ -16,6 +16,9 @@ export function fetchGetUserInfo() {
   });
 }
 
-export function fetchRefreshToken() {
-  return Promise.resolve<{ data: Api.Auth.LoginToken | null; error: null }>({ data: null, error: null });
+export function fetchLogout() {
+  return request<{ authenticated?: boolean }>({
+    url: '/api/auth/logout',
+    method: 'post'
+  });
 }
