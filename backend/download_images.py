@@ -12,7 +12,7 @@ ENDPOINT = os.getenv("S3_ENDPOINT", "http://100.64.0.4:9000")
 BUCKET = os.getenv("S3_BUCKET", "logistics-system")
 REGION = os.getenv("S3_REGION", "us-east-1")
 DB_DSN = os.getenv(
-    "DB_DSN", "host=127.0.0.1 port=5432 dbname=transport user=transport"
+    "DB_DSN", "host=100.64.0.3 port=5433 dbname=transport user=transport"
 )
 
 

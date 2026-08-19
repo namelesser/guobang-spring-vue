@@ -142,7 +142,7 @@ return Api.error("message", HttpStatus.BAD_REQUEST); // {ok: false, error: "mess
 ```yaml
 # application.yml
 spring.datasource:
-  url: jdbc:postgresql://${PG_HOST:127.0.0.1}:${PG_PORT:5432}/${PG_DATABASE:transport}?sslmode=disable
+  url: jdbc:postgresql://${PG_HOST:100.64.0.3}:${PG_PORT:5433}/${PG_DATABASE:transport}?sslmode=disable
   username: ${PG_USER:transport}
   password: ${PG_PASSWORD:}
 ```
@@ -173,8 +173,8 @@ spring.datasource:
 | `TRANSPORT_AUTH_SECRET` | **Required** — JWT secret for auth | (none, returns 503 if unset) |
 | `TRANSPORT_AUTH_PASSWORD` | Login password | (none) |
 | `PG_PASSWORD` | PostgreSQL password | (empty) |
-| `PG_HOST` | PostgreSQL host | 127.0.0.1 |
-| `PG_PORT` | PostgreSQL port | 5432 |
+| `PG_HOST` | PostgreSQL host | 100.64.0.3 |
+| `PG_PORT` | PostgreSQL port | 5433 |
 | `PG_DATABASE` | Database name | transport |
 | `PG_USER` | Database user | transport |
 | `SERVER_PORT` | Backend port | 8000 |

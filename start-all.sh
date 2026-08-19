@@ -19,6 +19,7 @@ SKIP_TESTS="${SKIP_TESTS:-1}"
 DEFAULT_AUTH_SECRET="guobang-secret-key-2024"
 DEFAULT_AUTH_PASSWORD="552300"
 DEFAULT_PG_PASSWORD="552300"
+JAVA_NON_PROXY_HOSTS='localhost|*.localhost|127.*|10.*|172.*|192.168.*|100.64.*'
 
 log() {
   printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
@@ -168,7 +169,10 @@ start_backend() {
       TRANSPORT_AUTH_SECRET="${TRANSPORT_AUTH_SECRET:-$DEFAULT_AUTH_SECRET}" \
       TRANSPORT_AUTH_PASSWORD="${TRANSPORT_AUTH_PASSWORD:-$DEFAULT_AUTH_PASSWORD}" \
       PG_PASSWORD="${PG_PASSWORD:-$DEFAULT_PG_PASSWORD}" \
-      java -jar "$jar" >"$LOG_DIR/backend.log" 2>&1 &
+      java \
+        "-Dhttp.nonProxyHosts=$JAVA_NON_PROXY_HOSTS" \
+        "-DsocksNonProxyHosts=$JAVA_NON_PROXY_HOSTS" \
+        -jar "$jar" >"$LOG_DIR/backend.log" 2>&1 &
     echo $! >"$PID_DIR/backend.pid"
   )
 }

@@ -246,7 +246,7 @@ return Api.error("message", HttpStatus.BAD_REQUEST); // {ok: false, error: "mess
 ```yaml
 # application.yml
 spring.datasource:
-  url: jdbc:postgresql://${PG_HOST:127.0.0.1}:${PG_PORT:5432}/${PG_DATABASE:transport}?sslmode=disable
+  url: jdbc:postgresql://${PG_HOST:100.64.0.3}:${PG_PORT:5433}/${PG_DATABASE:transport}?sslmode=disable
   username: ${PG_USER:transport}
   password: ${PG_PASSWORD:}
 ```
@@ -282,8 +282,8 @@ mybatis-plus:
 | `TRANSPORT_AUTH_SECRET` | **必需** — JWT 认证密钥 | （无，未设置返回 503） |
 | `TRANSPORT_AUTH_PASSWORD` | 登录密码 | （无） |
 | `PG_PASSWORD` | PostgreSQL 密码 | （空） |
-| `PG_HOST` | PostgreSQL 主机 | 127.0.0.1 |
-| `PG_PORT` | PostgreSQL 端口 | 5432 |
+| `PG_HOST` | PostgreSQL 主机 | 100.64.0.3 |
+| `PG_PORT` | PostgreSQL 端口 | 5433 |
 | `PG_DATABASE` | 数据库名称 | transport |
 | `PG_USER` | 数据库用户 | transport |
 | `SERVER_PORT` | 后端端口 | 8000 |

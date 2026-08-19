@@ -3,12 +3,12 @@
 过磅项目本地服务健康检查 + 自动恢复脚本 (Spring Boot 3 + Vue 3)
 
 检查:
-  1. PostgreSQL (port 5432) — pg_isready
+  1. PostgreSQL (100.64.0.3:5433) — TCP 连接
   2. 后端 Spring Boot (port 8000) — /actuator/health
   3. 前端 Vite dev server (port 9527) — HTTP 200
 
 自动恢复:
-  - PG 挂了 → brew services restart postgresql@17
+  - PG 挂了 → 告警（由服务器端恢复）
   - 后端挂了 → 从 creds.sh 提取密码，启动 mvn spring-boot:run
   - 前端挂了 → pnpm dev
 
@@ -21,12 +21,14 @@ import time
 import sys
 import os
 import re
+import shlex
 from datetime import datetime
 
 PROJECT_ROOT = os.path.expanduser("~/.hermes/scripts/guobang-spring-vue")
 BACKEND_PORT = 8000
 FRONTEND_PORT = 9527
-PG_PORT = 5432
+PG_HOST = "100.64.0.3"
+PG_PORT = 5433
 MAX_RECOVERY_WAIT = 20  # seconds
 CREDS_SCRIPT = os.path.expanduser("~/.hermes/scripts/creds/creds.sh")
 
@@ -36,10 +38,10 @@ def format_cron_message(title: str, body: str) -> str:
     return f"🔔 {title}｜{ts}\n\n{body.strip()}\n\n— 自动推送"
 
 
-def port_open(port: int) -> bool:
+def port_open(port: int, host: str = "127.0.0.1") -> bool:
     """检查端口是否在监听"""
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=2):
+        with socket.create_connection((host, port), timeout=2):
             return True
     except (ConnectionRefusedError, OSError):
         return False
@@ -93,20 +95,7 @@ def get_credential(name: str):
 
 def check_postgres() -> bool:
     """检查 PostgreSQL 是否可用"""
-    return port_open(PG_PORT)
-
-
-def recover_postgres() -> bool:
-    """尝试恢复 PostgreSQL"""
-    pid_file = "/opt/homebrew/var/postgresql@17/postmaster.pid"
-    if os.path.exists(pid_file):
-        try:
-            os.remove(pid_file)
-        except OSError:
-            pass
-    run_cmd("brew services restart postgresql@17")
-    time.sleep(3)
-    return check_postgres()
+    return port_open(PG_PORT, PG_HOST)
 
 
 def check_backend() -> bool:
@@ -125,20 +114,24 @@ def recover_backend() -> bool:
     pg_pw = get_credential("jd-transport-postgres")
     auth_pw = get_credential("guobang-transport-auth")
     auth_secret = get_credential("guobang-transport-auth-secret")
-    if not pg_pw:
-        return False
-
-    env_vars = (
-        f"TRANSPORT_AUTH_PASSWORD='{auth_pw}' "
-        f"TRANSPORT_AUTH_SECRET='{auth_secret}' "
-        f"PG_PASSWORD='{pg_pw}' "
-        f"PG_HOST=127.0.0.1 "
-        f"PG_PORT=5432 "
-        f"PG_DATABASE=transport "
-        f"PG_USER=transport"
+    env = {
+        "TRANSPORT_AUTH_PASSWORD": auth_pw,
+        "TRANSPORT_AUTH_SECRET": auth_secret,
+        "PG_PASSWORD": pg_pw,
+        "PG_HOST": PG_HOST,
+        "PG_PORT": str(PG_PORT),
+        "PG_DATABASE": "transport",
+        "PG_USER": "transport",
+    }
+    env_vars = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items() if v)
+    if env_vars:
+        env_vars += " "
+    cmd = (
+        f"cd {PROJECT_ROOT} && "
+        f"JAVA_HOME=/opt/homebrew/opt/openjdk@17 "
+        f"PATH=/opt/homebrew/opt/openjdk@17/bin:$PATH "
+        f"{env_vars} SKIP_BUILD=1 ./start-all.sh restart > /tmp/guobang-backend.log 2>&1 &"
     )
-    backend_dir = os.path.join(PROJECT_ROOT, "backend")
-    cmd = f"cd {backend_dir} && {env_vars} nohup mvn spring-boot:run > /tmp/guobang-backend.log 2>&1 &"
     run_cmd(cmd, background=True)
 
     for _ in range(MAX_RECOVERY_WAIT):
@@ -174,13 +167,9 @@ def main():
 
     # 1. PostgreSQL
     if not check_postgres():
-        messages.append("⚠️ PostgreSQL 不可用，尝试恢复...")
-        if recover_postgres():
-            messages.append("✅ PostgreSQL 已恢复")
-        else:
-            messages.append("❌ PostgreSQL 恢复失败！")
-            print(format_cron_message("过磅服务监控", "\n".join(messages)))
-            return
+        messages.append(f"❌ 服务器 PostgreSQL ({PG_HOST}:{PG_PORT}) 不可用")
+        print(format_cron_message("过磅服务监控", "\n".join(messages)))
+        return
 
     # 2. Backend
     if not check_backend():
