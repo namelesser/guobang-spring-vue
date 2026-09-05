@@ -30,6 +30,7 @@ logs/
 
 # Backup
 frontend.bak/
+backups/*.dump
 
 # Coverage
 coverage/
